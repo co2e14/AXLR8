@@ -15,6 +15,7 @@ The first version modelled one linear line. The AXL workflow needs:
 | "Mosquito Xtal3 / Mosquito LCP" stacked; "Arktik / DFSA" stacked | A step may name **alternative devices** |
 | Schedule pins workflow 1 to Peeler 1, Echo 1, X-ACT 1/3/5 | A step may restrict which **units** it uses |
 | Convergence points (yellow): crystal plate + source plate meet at the Mosquito; crystal plate + compound plate meet at the Echo | **Joins**: two routes rendezvous at a step and share one device run |
+| Slide 2: a compound plate only leaves storage for its own soak | **Start points (sync)**: two routes start a step together, each on its own device |
 | "batch mode" arrow Mosquito → XL200 LiHa; compound plate peeled/dispensed/resealed for every soak | **Loops** over a block of steps |
 | After X-ACT a plate yields pins, the plate itself, seed tubes | **Spawn**: a step can start items on other routes |
 | Incubation inside the SpectroQ (orange, project-specific) | **Dwell** time after a step that does not hold the device |
@@ -22,7 +23,7 @@ The first version modelled one linear line. The AXL workflow needs:
 | Green MAP boxes: manual access points | Manual transport (no cobot) |
 | Linked devices (BenchCel + labeller; SpectroQ imaging → incubation → imaging) | Linked transport (no cobot, no move time) |
 | Soaking (blue) during runs, seed stock (red) during shutdowns, crystallisation (pink) always | **Scenarios**: *Run day* / *Shutdown day* |
-| Phases 1–4 of purchases (slide 3) | **Phase** selector: only units bought by that phase exist |
+| Phases 1–4 of purchases (slide 3) | **Phase** selector: only units bought by that phase exist. Routes that need an unbought device (and their partners) are skipped and listed; steps pinned to an unbought unit share the bought ones, with a warning |
 
 ## 2. Devices (slide 3)
 
@@ -41,8 +42,8 @@ Units are listed with the phase each arrives in. Times are "Max Active Device Ti
 | BenchCel plate supply | 1 (P2) | 20 s | |
 | Plate labeller | 1 (P2) | **assumed 10 s** | blank in deck |
 | DC2SA compound storage | 1 (P2) | 25 s | |
-| Echo 650T | 1 (P2), 1 (P4) | 7 min | P4 unit is the relocated XChem Echo |
-| XL200 LiHa / reformatter | 1 (P3) | **assumed 5 min** per plate | deck says "batch" |
+| Echo 650T | 1 (P2), 1 (P4) | 7 min | Slide 3 lists the second Echo with quantity 0 ("relocate existing XChem asset"); the flowchart says Echo (2of), so it is modelled as arriving in P4 |
+| XL200 LiHa / reformatter | 1 (P3) | **assumed 2 min** per plate | deck says "batch". Slide 2 runs two Mosquitos back to back at 5 min, so the LiHa must supply a plate at least every 2.5 min |
 | XL200 thawer | 1 (P3) | **assumed 10 min** | not in device list |
 | DFSA STX-280 (−20 °C) | 1 (P4) | 25 s | |
 | Arktik (−80 °C) | 1 (P4) | 15 s | |
@@ -63,15 +64,18 @@ Soak incubation is project-specific (orange); default **assumed 1 h**.
 1. *Reagents from Arktik −80 °C*: MAP ⇒ Arktik → Connect (reformat) → Centrifuge → XL200 LiHa → [opt LN2 → Connect → Arktik]
 2. *Reagents from −20 °C*: MAP ⇒ DFSA → XL200 thawer → Centrifuge → Peeler → XL200 LiHa → [opt LN2 → DFSA]
 3. *Reagents from SpectroQ*: MAP ⇒ SpectroQ → Centrifuge* → Peeler* → XL200 LiHa → [opt Sealer/Capper → SpectroQ]
-4. *Mosquito source plates*: BenchCel ⇒ Labeller → loop{ XL200 LiHa → Sealer → Centrifuge* → Peeler → Mosquito {join mosquito} } × batch → Waste
+4. *Mosquito source plates*: BenchCel ⇒ Labeller → XL200 LiHa → Sealer → Centrifuge* → Peeler → loop{ Mosquito {join mosquito} } × 8 → Waste.
+   Slide 2 shows each Mosquito running its 8 plates back to back after a single reagent thaw and spin, so the source plate is prepared once and then serves the batch. The "batch mode" arrow (Mosquito → XL200 LiHa) is read as the plate going back to the LiHa for the *next* batch, which is outside one day.
 5. *Crystal plates*: BenchCel ⇒ Labeller → XL200 LiHa → Mosquito {join mosquito} → Sealer → Centrifuge* → SpectroQ (growth storage)
 
 **Soaking workflows ×2 (blue, run days)**: "post growth plates enter two workflows at 15 min intervals (imaging bottleneck), workflows are offset by 7m30s"
 
-6. *Soak workflow 1* (odd plates; release every 15 min from 0): SpectroQ → Peeler(1) → Echo(1) {join soak-1} → Sealer → SpectroQ pre-soak imaging ⇒ incubation (dwell) ⇒ post-soak imaging → Peeler(1) → X-ACT(1,3,5) [spawns pins] → Sealer → SpectroQ (plates route)
+6. *Soak workflow 1* (odd plates; release every 15 min from 0): SpectroQ (orange) {start soak-1} → Peeler(1) → Echo(1) {join soak-1} → Sealer → SpectroQ pre-soak imaging, then incubation (dwell) ⇒ post-soak imaging → Peeler(1) → X-ACT(1,3,5) [spawns pins] → [opt Sealer → SpectroQ]
+   The last two steps are grey on slide 1 and are also the separate "Route for Plates" (X-ACT → Sealer → SpectroQ). Slide 2 shows a clear sealer after harvesting, so they are on by default but marked optional.
 7. *Soak workflow 2* (even plates; every 15 min from 7 min 30 s): same with Peeler(2), Echo(2), X-ACT(2,4,6)
-8. *Compound plate 1*: MAP ⇒ DC2SA → Centrifuge(1) → loop{ Peeler(1) → Echo(1) {join soak-1} → PlateLoc } × plates → DC2SA
-9. *Compound plate 2*: as 8 with unit 2 and {join soak-2}
+8. *Compound plate 1*: loop{ DC2SA {start soak-1} → Centrifuge*(1) → Peeler(1) → Echo(1) {join soak-1} → PlateLoc → DC2SA } × 8
+   Slide 2 shows the compound plate going storage → centrifuge → peeler → Echo → foil sealer → storage for every soak, so it only leaves storage when its crystal plate does. Compound plates enter the system through MAP (reagents in/out) beforehand.
+9. *Compound plate 2*: as 8 with unit 2 and {join soak-2}. Slide 2 labels its first visit "2" and later ones "C1"; read as the same plate.
 
 **After harvesting**
 
@@ -98,3 +102,9 @@ Soak incubation is project-specific (orange); default **assumed 1 h**.
 * A cobot carries one item; any cobot can serve any move (rail).
 * An item keeps its device occupied until a cobot picks it up.
 * Phase defaults: cobots P2 = 0 (manual moves), P3 = 1, P4 = 3.
+* Between steps an item waits in an unlimited buffer: it frees its device when the cobot picks it up, even if the next device is busy.
+  A plate waiting for an X-ACT or for its meeting partner therefore occupies no device (it shows as queued on the map).
+* At a meeting point the item that arrives second decides the device, unit and time; both routes' steps should name the same device.
+* Reagent routes release 1 item each per day. Seed tubes: 4 per shutdown day, starting at an X-ACT. One puck of pins per harvested plate.
+* "Sealer/Capper" on the reagent leftover path is read as the A4S sealer.
+* The first step of a route that starts with a cobot move (pins, seed tubes) is fetched from wherever the item was, at the cobot move time.
