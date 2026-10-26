@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getExample, listExamples, simulate } from './lib/api'
 import { buildTimelines, stateAt } from './lib/timeline'
+import { asLabConfig } from './lib/storage'
 import type { LabConfig, RunSettings, SimResult } from './lib/types'
 import { LineSchematic, type Selection } from './components/LineSchematic'
 import { Inspector } from './components/Inspector'
@@ -34,7 +35,7 @@ function save(key: string, value: unknown) {
 type Tab = 'results' | 'samples' | 'compare'
 
 export default function App() {
-  const [lab, setLab] = useState<LabConfig | null>(() => load<LabConfig>(LAB_KEY))
+  const [lab, setLab] = useState<LabConfig | null>(() => asLabConfig(load<unknown>(LAB_KEY)))
   const [run, setRun] = useState<RunSettings>(
     () => load<RunSettings>(RUN_KEY) ?? { num_samples: 12, arrival_interval: 30, seed: 1 },
   )
@@ -47,6 +48,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+  const sidePanel = useRef<HTMLElement>(null)
+  const firstSelection = useRef(true)
 
   const makespan = result?.kpis.makespan ?? 0
   const pb = usePlayback(makespan)
@@ -69,6 +72,23 @@ export default function App() {
   const timelines = useMemo(() => (result ? buildTimelines(result.events) : null), [result])
   const states = useMemo(() => (timelines ? stateAt(timelines, pb.t) : null), [timelines, pb.t])
   const stale = result !== null && lab !== null && JSON.stringify(lab) !== resultLab
+  const { setPlaying } = pb
+
+  // A run only describes the lab it was made from; stop replaying it once the lab changes.
+  useEffect(() => {
+    if (stale) setPlaying(false)
+  }, [stale, setPlaying])
+
+  // On narrow screens the settings panel sits below the line: bring it into view on selection.
+  useEffect(() => {
+    if (firstSelection.current) {
+      firstSelection.current = false
+      return
+    }
+    if (window.matchMedia('(max-width: 960px)').matches) {
+      sidePanel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [selection])
 
   const execute = useCallback(
     async (settings: RunSettings) => {
@@ -101,9 +121,9 @@ export default function App() {
 
   const importLab = async (file: File) => {
     try {
-      const parsed = JSON.parse(await file.text()) as LabConfig
-      if (!Array.isArray(parsed.stations)) throw new Error('missing stations')
-      setLab({ name: parsed.name ?? file.name, stations: parsed.stations, arms: parsed.arms ?? [], transfers: parsed.transfers ?? [] })
+      const parsed = asLabConfig(JSON.parse(await file.text()))
+      if (!parsed) throw new Error('it has no stations, or a station is missing its id, name or time')
+      setLab(parsed)
       setSelection({ kind: 'lab' })
       setResult(null)
     } catch (e) {
@@ -193,13 +213,13 @@ export default function App() {
           </div>
 
           {lab ? (
-            <LineSchematic lab={lab} states={states} kpis={stale ? null : (result?.kpis ?? null)} selection={selection} onSelect={setSelection} />
+            <LineSchematic lab={lab} states={stale ? null : states} kpis={stale ? null : (result?.kpis ?? null)} selection={selection} onSelect={setSelection} />
           ) : (
             <p className="hint pad">Loading the example lab…</p>
           )}
 
-          {result && <PlaybackBar pb={pb} makespan={makespan} />}
-          {stale && <p className="stale">You have changed the lab since this run. Run again to see the effect.</p>}
+          {result && !stale && <PlaybackBar pb={pb} makespan={makespan} />}
+          {stale && <p className="stale">You have changed the lab since the last run. Run again to see the effect; the results below are from the previous version.</p>}
           <StatusLegend />
 
           <div className="tabs" role="tablist" aria-label="Run details">
@@ -221,7 +241,7 @@ export default function App() {
           </div>
         </section>
 
-        <aside className="side-panel">
+        <aside className="side-panel" ref={sidePanel}>
           {lab && <Inspector lab={lab} kpis={stale ? null : (result?.kpis ?? null)} selection={selection} onChange={setLab} onSelect={setSelection} />}
         </aside>
       </main>

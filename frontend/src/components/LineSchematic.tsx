@@ -22,6 +22,14 @@ const H = 290
 const TOKEN_R = 5.5
 
 const centre = (i: number) => COL / 2 + i * COL
+
+/** Keyboard activation for SVG elements acting as buttons (Enter or Space). */
+const activate = (fn: () => void) => (e: React.KeyboardEvent) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    fn()
+  }
+}
 const halfWidth = (loc: string) => (loc === INPUT || loc === OUTPUT ? EW / 2 : BW / 2)
 
 interface Props {
@@ -71,6 +79,8 @@ export function LineSchematic({ lab, states, kpis, selection, onSelect }: Props)
   const locs = [INPUT, ...lab.stations.map((s) => s.id), OUTPUT]
   const transfers = routeTransfers(lab)
   const geo = transfers.map(transferGeometry)
+  const placeName = (id: string) =>
+    id === INPUT ? 'Start' : id === OUTPUT ? 'Done' : (lab.stations.find((s) => s.id === id)?.name ?? id)
   const armName = Object.fromEntries(lab.arms.map((a) => [a.id, a.name]))
   const width = locs.length * COL
 
@@ -111,9 +121,9 @@ export function LineSchematic({ lab, states, kpis, selection, onSelect }: Props)
               }${isBottleneck ? ' bottleneck' : ''}`}
               tabIndex={0}
               role="button"
-              aria-label={`Move from ${t.from_id} to ${t.to_id}`}
+              aria-label={`Move from ${placeName(t.from_id)} to ${placeName(t.to_id)}`}
               onClick={() => onSelect({ kind: 'transfer', from: t.from_id, to: t.to_id })}
-              onKeyDown={(e) => e.key === 'Enter' && onSelect({ kind: 'transfer', from: t.from_id, to: t.to_id })}
+              onKeyDown={activate(() => onSelect({ kind: 'transfer', from: t.from_id, to: t.to_id }))}
             >
               <path className="hit" d={g.d} />
               <path className="line" d={g.d} />
@@ -158,7 +168,7 @@ export function LineSchematic({ lab, states, kpis, selection, onSelect }: Props)
               role="button"
               aria-label={`Station ${st.name}`}
               onClick={() => onSelect({ kind: 'station', id: st.id })}
-              onKeyDown={(e) => e.key === 'Enter' && onSelect({ kind: 'station', id: st.id })}
+              onKeyDown={activate(() => onSelect({ kind: 'station', id: st.id }))}
             >
               <rect className="block" x={x} y={TOP} width={BW} height={BH} rx={6} />
               <text className="station-name" x={x + 12} y={TOP + 22}>

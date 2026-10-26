@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fmtClock } from '../lib/format'
 
-export const SPEEDS = [1, 10, 60, 300, 1800]
+export const SPEEDS = [1, 10, 60, 300, 1800, 7200]
 
 /** Smallest speed that replays the whole run in about 30 seconds or less. */
 export const autoSpeed = (makespan: number) => SPEEDS.find((s) => makespan / s <= 30) ?? SPEEDS[SPEEDS.length - 1]
@@ -18,14 +18,7 @@ export function usePlayback(makespan: number) {
     const tick = (now: number) => {
       const dt = last.current === null ? 0 : (now - last.current) / 1000
       last.current = now
-      setT((prev) => {
-        const next = prev + dt * speed
-        if (next >= makespan) {
-          setPlaying(false)
-          return makespan
-        }
-        return next
-      })
+      setT((prev) => Math.min(makespan, prev + dt * speed))
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
@@ -34,6 +27,10 @@ export function usePlayback(makespan: number) {
       last.current = null
     }
   }, [playing, speed, makespan])
+
+  useEffect(() => {
+    if (playing && t >= makespan) setPlaying(false)
+  }, [playing, t, makespan])
 
   const start = useCallback((total: number) => {
     setT(0)
@@ -47,7 +44,7 @@ export function usePlayback(makespan: number) {
 type PlaybackState = ReturnType<typeof usePlayback>
 
 export function PlaybackBar({ pb, makespan }: { pb: PlaybackState; makespan: number }) {
-  const atEnd = pb.t >= makespan
+  const atEnd = pb.t >= makespan - 1e-6
   return (
     <div className="playback">
       <button
@@ -65,7 +62,7 @@ export function PlaybackBar({ pb, makespan }: { pb: PlaybackState; makespan: num
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2.5v11a.5.5 0 0 0 .77.42l8.5-5.5a.5.5 0 0 0 0-.84l-8.5-5.5A.5.5 0 0 0 4 2.5Z" /></svg>
         )}
       </button>
-      <output className="clock" aria-label="Simulated time">{fmtClock(pb.t)}</output>
+      <output className="clock">{fmtClock(pb.t)}</output>
       <input
         className="scrub"
         type="range"

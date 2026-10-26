@@ -16,18 +16,30 @@ interface NumberFieldProps {
 export function NumberField({ label, value, onChange, min = 0, max, step = 1, unit, integer }: NumberFieldProps) {
   const id = useId()
   const [draft, setDraft] = useState(String(value))
-  useEffect(() => setDraft(String(value)), [value])
+  const [invalid, setInvalid] = useState(false)
+  useEffect(() => {
+    setDraft(String(value))
+    setInvalid(false)
+  }, [value])
   const commit = (text: string) => {
     setDraft(text)
     const v = Number(text)
-    if (text.trim() === '' || !Number.isFinite(v)) return
-    if (integer && !Number.isInteger(v)) return
-    if (v < min || (max !== undefined && v > max)) return
-    onChange(v)
+    const ok =
+      text.trim() !== '' &&
+      Number.isFinite(v) &&
+      (!integer || Number.isInteger(v)) &&
+      v >= min &&
+      (max === undefined || v <= max)
+    setInvalid(!ok)
+    if (ok) onChange(v)
   }
+  const kind = integer ? 'a whole number' : 'a number'
+  const range = max === undefined ? `of ${min} or more` : `from ${min} to ${max}`
   return (
-    <label className="field" htmlFor={id}>
-      <span className="field-label">{label}</span>
+    <div className="field">
+      <label className="field-label" htmlFor={id}>
+        {label}
+      </label>
       <span className="field-input">
         <input
           id={id}
@@ -37,12 +49,22 @@ export function NumberField({ label, value, onChange, min = 0, max, step = 1, un
           min={min}
           max={max}
           step={step}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? `${id}-error` : undefined}
           onChange={(e) => commit(e.target.value)}
-          onBlur={() => setDraft(String(value))}
+          onBlur={() => {
+            setDraft(String(value))
+            setInvalid(false)
+          }}
         />
         {unit && <span className="unit">{unit}</span>}
       </span>
-    </label>
+      {invalid && (
+        <span className="field-error" id={`${id}-error`}>
+          Enter {kind} {range}. Still using {value}.
+        </span>
+      )}
+    </div>
   )
 }
 
