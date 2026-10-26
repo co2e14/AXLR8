@@ -12,7 +12,7 @@ import { Compare, type Baseline } from './components/Compare'
 import { NumberField } from './components/fields'
 import './App.css'
 
-const WF_KEY = 'axlr8.workflow'
+const WF_KEY = 'axlr8.workflow.v3' // bump when the deck example changes shape
 const RUN_KEY = 'axlr8.run.v2'
 const DEFAULT_RUN: RunSettings = { scenario: 'run', phase: 4, cobots: null, single: false, seed: 1 }
 
@@ -217,6 +217,23 @@ export default function App() {
               {busy ? 'Running…' : `Run ${run.scenario === 'run' ? 'run-day' : 'shutdown-day'} schedule`}
             </button>
           </div>
+
+          {result && !stale && wf && (result.kpis.skipped.length > 0 || result.kpis.warnings.length > 0) && (
+            <div className="notice" role="status">
+              {result.kpis.skipped.length > 0 && (
+                <p>
+                  <strong>Not possible with this equipment:</strong>{' '}
+                  {result.kpis.skipped
+                    .map((sk) => `${wf.routes.find((r) => r.id === sk.route)?.name ?? sk.route} (${sk.reason})`)
+                    .join('; ')}
+                  .
+                </p>
+              )}
+              {result.kpis.warnings.map((w) => (
+                <p key={w}>{w}.</p>
+              ))}
+            </div>
+          )}
 
           {stuck.length > 0 && wf && (
             <div className="stuck" role="status">

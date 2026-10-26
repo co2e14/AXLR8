@@ -7,7 +7,7 @@ import type { Route, Step, Workflow } from './types'
 const t = (v: number) => ({ value: v, kind: 'fixed' as const, spread: 0 })
 const step = (d: string, extra: Partial<Step> = {}): Step => ({
   devices: [d], units: null, time: null, dwell: null, timing: null, label: null, optional: false, enabled: true,
-  transport: 'cobot', join: null, spawn: [], ...extra,
+  transport: 'cobot', join: null, sync: null, spawn: [], ...extra,
 })
 const route = (id: string, steps: Step[], extra: Partial<Route> = {}): Route => ({
   id, name: id, group: '', labware: '', enabled: true, scenarios: ['run', 'shutdown'], count: 1, interval: 0, offset: 0,

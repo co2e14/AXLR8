@@ -130,7 +130,9 @@ export function RoutesTable({ wf, kpis, onSelect }: Props) {
               <td className="num">{r.max_cycle_time == null ? '—' : fmtDuration(r.max_cycle_time)}</td>
               <td className="num">{r.throughput_per_hour == null ? '—' : r.throughput_per_hour.toFixed(1)}</td>
               <td className={r.keeps_up === false ? 'worse' : r.keeps_up ? 'better' : ''}>
-                {r.keeps_up === null
+                {r.completed < r.released
+                  ? 'Some items never finished'
+                  : r.keeps_up === null
                   ? <span className="hint">{route && route.interval > 0 ? 'Too few items to tell' : 'Released all at once'}</span>
                   : r.keeps_up
                     ? `Yes, every ${fmtDuration(route?.interval ?? 0)}`

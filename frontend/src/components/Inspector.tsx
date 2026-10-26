@@ -388,6 +388,7 @@ function StepPanel({ wf, phase, onChange, onSelect, route: r, index }: Props & {
   const allUnits = s.devices.length === 1 && first?.unit_phases ? first.unit_phases.map((_, i) => i + 1) : null
   const available = first ? unitsInPhase(first, phase) : null
   const partner = s.join ? wf.routes.find((x) => x.id !== r.id && x.steps.some((y) => y.join === s.join)) : undefined
+  const syncPartner = s.sync ? wf.routes.find((x) => x.id !== r.id && x.steps.some((y) => y.sync === s.sync)) : undefined
   const select = (i: number) => onSelect({ kind: 'step', route: r.id, index: i })
 
   return (
@@ -443,7 +444,7 @@ function StepPanel({ wf, phase, onChange, onSelect, route: r, index }: Props & {
                   type="checkbox"
                   checked={s.units?.includes(u) ?? false}
                   onChange={(e) => {
-                    const next = e.target.checked ? [...(s.units ?? []), u].sort() : (s.units ?? []).filter((x) => x !== u)
+                    const next = e.target.checked ? [...(s.units ?? []), u].sort((a, b) => a - b) : (s.units ?? []).filter((x) => x !== u)
                     set({ units: next.length ? next : null })
                   }}
                 />
@@ -508,6 +509,16 @@ function StepPanel({ wf, phase, onChange, onSelect, route: r, index }: Props & {
             ? `Waits here for an item from ${partner.name}; both are processed together.`
             : 'No other route uses this meeting point yet. Give a step in the partner route the same name.'
           : 'Give two steps in different routes the same name to make items meet there (for example the Echo soak).'}
+      </p>
+
+      <h3>Starts together with another route</h3>
+      <TextField label="Start point name" value={s.sync ?? ''} onChange={(sync) => set({ sync: sync || null })} />
+      <p className="hint">
+        {s.sync
+          ? syncPartner
+            ? `Waits here until an item from ${syncPartner.name} arrives at its matching step, then each carries on separately.`
+            : 'No other route uses this start point yet.'
+          : 'Use this to keep paired items in step, for example a compound plate that only leaves storage when its crystal plate does.'}
       </p>
 
       <h3>Starts other items</h3>

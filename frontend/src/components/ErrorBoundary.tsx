@@ -14,7 +14,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
 
   reset = () => {
     try {
-      localStorage.removeItem('axlr8.workflow')
+      localStorage.removeItem('axlr8.workflow.v3')
     } catch {
       /* storage unavailable */
     }

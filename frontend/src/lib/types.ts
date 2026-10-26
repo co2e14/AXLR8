@@ -38,6 +38,7 @@ export interface Step {
   enabled: boolean
   transport: Transport
   join: string | null
+  sync: string | null
   spawn: Spawn[]
 }
 
@@ -147,6 +148,8 @@ export interface Bottleneck {
 
 export interface Kpis {
   makespan: number
+  skipped: { route: string; reason: string }[]
+  warnings: string[]
   released: number
   completed: number
   devices: DeviceStats[]

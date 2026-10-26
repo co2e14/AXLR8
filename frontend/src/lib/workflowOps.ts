@@ -15,7 +15,7 @@ const mapRoute = (wf: Workflow, id: string, fn: (r: Route) => Route): Workflow =
 export function newStep(device: string): Step {
   return {
     devices: [device], units: null, time: null, dwell: null, timing: null, label: null, optional: false,
-    enabled: true, transport: 'cobot', join: null, spawn: [],
+    enabled: true, transport: 'cobot', join: null, sync: null, spawn: [],
   }
 }
 

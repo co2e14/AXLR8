@@ -7,7 +7,7 @@ function asStep(s: unknown): Step | null {
   if (!isObject(s) || !Array.isArray(s.devices) || s.devices.length === 0) return null
   return {
     units: null, time: null, dwell: null, timing: null, label: null, optional: false, enabled: true,
-    transport: 'cobot', join: null, spawn: [], ...(s as Partial<Step>), devices: s.devices as string[],
+    transport: 'cobot', join: null, sync: null, spawn: [], ...(s as Partial<Step>), devices: s.devices as string[],
   }
 }
 

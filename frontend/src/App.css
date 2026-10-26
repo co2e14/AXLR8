@@ -910,3 +910,15 @@ button.link.plain:hover {
 .routes-table td.worse {
   font-weight: 600;
 }
+
+.notice {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-left: 4px solid var(--st-queued);
+  background: var(--panel-2);
+  font-size: 13.5px;
+}
+
+.notice p {
+  margin: 2px 0;
+}

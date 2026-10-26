@@ -75,6 +75,7 @@ export function WorkflowMap({ wf, phase, scenario, states, kpis, selection, onSe
     else groups.push([r.group, [r]])
   }
   const bottleneck = kpis?.bottleneck?.kind === 'device' ? kpis.bottleneck.id : null
+  const skipped = new Set(kpis?.skipped.map((s) => s.route) ?? [])
   const highlight = selection.kind === 'device' ? selection.id : null
   const width = Math.max(...wf.routes.map((r) => r.steps.length)) * PITCH + 4
 
@@ -90,7 +91,8 @@ export function WorkflowMap({ wf, phase, scenario, states, kpis, selection, onSe
               wf={wf}
               devices={devices}
               phase={phase}
-              active={r.enabled && r.scenarios.includes(scenario)}
+              active={r.enabled && r.scenarios.includes(scenario) && !skipped.has(r.id)}
+              notPossible={skipped.has(r.id)}
               items={byRoute.get(r.id) ?? []}
               showItems={states !== null}
               width={width}
@@ -110,6 +112,7 @@ export function WorkflowMap({ wf, phase, scenario, states, kpis, selection, onSe
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z]+/g, '-')
 
 interface LaneProps {
+  notPossible: boolean
   route: Route
   wf: Workflow
   devices: Map<string, Device>
@@ -125,7 +128,7 @@ interface LaneProps {
   kpis: Kpis | null
 }
 
-function Lane({ route, wf, devices, phase, active, items, showItems, width, bottleneck, highlight, selection, onSelect, kpis }: LaneProps) {
+function Lane({ notPossible, route, wf, devices, phase, active, items, showItems, width, bottleneck, highlight, selection, onSelect, kpis }: LaneProps) {
   const at = (step: number, status: string) => items.filter((s) => s.step === step && s.status === status)
   const atStart = items.filter((s) => s.step === -1 && s.status !== 'moving').length
   const pending = items.filter((s) => s.status === 'pending').length
@@ -133,7 +136,13 @@ function Lane({ route, wf, devices, phase, active, items, showItems, width, bott
   const inProgress = items.length - pending - done
   const stats = kpis?.routes.find((x) => x.id === route.id)
   const routeSelected = selection.kind === 'route' && selection.id === route.id
-  const scenarioNote = active ? null : !route.enabled ? 'Switched off' : route.scenarios.includes('run') ? 'Run days only' : 'Shutdown days only'
+  const scenarioNote = active
+    ? null
+    : notPossible
+      ? `Not possible with phase ${phase} equipment`
+      : !route.enabled
+        ? 'Switched off'
+        : route.scenarios.includes('run') ? 'Run days only' : 'Shutdown days only'
 
   return (
     <div className={`wf-lane${active ? '' : ' inactive'}`}>
@@ -231,9 +240,11 @@ function Lane({ route, wf, devices, phase, active, items, showItems, width, bott
                   Bottleneck{devStats?.utilisation != null ? `, busy ${fmtPct(devStats.utilisation)}` : ''}
                 </text>
               )}
-              {!isBottleneck && s.join && (
+              {!isBottleneck && (s.join || s.sync) && (
                 <text className="join-label" x={x} y={TOP - 8}>
-                  Meets {partnerName(wf, route.id, s.join)}
+                  {s.join
+                    ? `Meets ${partnerName(wf, route.id, s.join, 'join')}`
+                    : `Starts with ${partnerName(wf, route.id, s.sync!, 'sync')}`}
                 </text>
               )}
               {s.dwell && (
@@ -312,8 +323,8 @@ function unitsText(step: Step, devices: Device[], phase: number): string {
   return n === 0 ? 'none yet' : n === 1 ? '' : `${n} units`
 }
 
-function partnerName(wf: Workflow, routeId: string, join: string): string {
-  const other = wf.routes.find((r) => r.id !== routeId && r.steps.some((s) => s.join === join))
+function partnerName(wf: Workflow, routeId: string, key: string, kind: 'join' | 'sync'): string {
+  const other = wf.routes.find((r) => r.id !== routeId && r.steps.some((s) => s[kind] === key))
   return other?.name ?? 'partner'
 }
 
