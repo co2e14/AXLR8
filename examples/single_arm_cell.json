@@ -1,0 +1,19 @@
+{
+  "name": "Single-arm workcell",
+  "stations": [
+    {"id": "barcode", "name": "Barcode reader", "process_time": {"value": 8}},
+    {"id": "dispense", "name": "Dispenser", "process_time": {"value": 45, "kind": "normal", "spread": 5}},
+    {"id": "incubate", "name": "Incubator", "process_time": {"value": 600}, "capacity": 8},
+    {"id": "seal", "name": "Plate sealer", "process_time": {"value": 25}},
+    {"id": "image", "name": "Imager", "process_time": {"value": 90, "kind": "triangular", "spread": 20}}
+  ],
+  "arms": [{"id": "arm", "name": "Cobot"}],
+  "transfers": [
+    {"from_id": "input", "to_id": "barcode", "time": {"value": 18}, "arm": "arm"},
+    {"from_id": "barcode", "to_id": "dispense", "time": {"value": 20}, "arm": "arm"},
+    {"from_id": "dispense", "to_id": "incubate", "time": {"value": 25}, "arm": "arm"},
+    {"from_id": "incubate", "to_id": "seal", "time": {"value": 25}, "arm": "arm"},
+    {"from_id": "seal", "to_id": "image", "time": {"value": 20}, "arm": "arm"},
+    {"from_id": "image", "to_id": "output", "time": {"value": 18}, "arm": "arm"}
+  ]
+}
