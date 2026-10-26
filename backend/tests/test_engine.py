@@ -1,102 +1,154 @@
 import pytest
 
-from axlr8.engine import simulate
-from axlr8.model import INPUT, OUTPUT, RunSettings, TimeSpec
-from conftest import lab, station, transfer
+from axlr8.engine import WorkflowError
+from axlr8.model import Loop, Spawn, TimeSpec
+from conftest import dev, done, route, run, starts, step, wf
 
 
-def completions(events):
-    return sorted(e.t for e in events if e.kind == "completed")
-
-
-def run(cfg, n=1, interval=0.0, seed=None):
-    return simulate(cfg, RunSettings(num_samples=n, arrival_interval=interval, seed=seed))
-
-
-def test_single_sample_walks_the_route_in_contract_order():
-    cfg = lab([station("s1", 10)], [transfer(INPUT, "s1", 2), transfer("s1", OUTPUT, 3)])
-    events = run(cfg)
-    assert [(e.kind, e.at) for e in events] == [
-        ("released", INPUT),
-        ("dest_reserved", INPUT),
-        ("move_start", INPUT),
-        ("move_end", "s1"),
-        ("process_start", "s1"),
-        ("process_end", "s1"),
-        ("dest_reserved", "s1"),
-        ("move_start", "s1"),
-        ("move_end", OUTPUT),
-        ("completed", OUTPUT),
+def test_single_item_walks_its_route_with_cobot_moves():
+    w = wf([dev("a", 10), dev("b", 5)], [route("r", [step("a"), step("b")])], move=2)
+    events = run(w)
+    assert [(e.kind, e.step) for e in events] == [
+        ("released", -1),
+        ("move_ready", -1), ("move_start", -1), ("move_end", 0),
+        ("process_start", 0), ("process_end", 0),
+        ("move_ready", 0), ("move_start", 0), ("move_end", 1),
+        ("process_start", 1), ("process_end", 1),
+        ("completed", 1),
     ]
-    assert completions(events) == [15]
-    assert {e.sample for e in events} == {1}
+    assert done(events) == [19]
 
 
-def test_single_slot_serialises_samples():
-    assert completions(run(lab([station("s1", 10)]), n=3)) == [10, 20, 30]
+def test_routes_compete_for_a_shared_device():
+    w = wf([dev("p", 10)], [route("r1", [step("p")]), route("r2", [step("p")])])
+    assert done(run(w)) == [10, 20]
 
 
-def test_capacity_runs_samples_in_parallel():
-    assert completions(run(lab([station("s1", 10, capacity=2)]), n=4)) == [10, 10, 20, 20]
+def test_more_units_run_in_parallel():
+    w = wf([dev("p", 10, units=2)], [route("r1", [step("p")]), route("r2", [step("p")])])
+    assert done(run(w)) == [10, 10]
 
 
-def test_arrival_interval_staggers_release():
-    assert completions(run(lab([station("s1", 1)]), n=3, interval=5)) == [1, 6, 11]
+def test_unit_restriction_pins_steps_to_units():
+    same = wf([dev("p", 10, units=2)], [route("r1", [step("p", units=[1])]), route("r2", [step("p", units=[1])])])
+    split = wf([dev("p", 10, units=2)], [route("r1", [step("p", units=[1])]), route("r2", [step("p", units=[2])])])
+    assert done(run(same)) == [10, 20]
+    assert done(run(split)) == [10, 10]
+    assert {u for _, _, u in starts(run(split), "p")} == {1, 2}
 
 
-def test_shared_arm_makes_samples_wait():
-    cfg = lab(
-        [station("s1", 0)],
-        [transfer(INPUT, "s1", 5, arm="cobot"), transfer("s1", OUTPUT, 5, arm="cobot")],
-        arms=["cobot"],
+def test_restricted_unit_missing_in_phase_falls_back_to_available_units():
+    w = wf([dev("p", 10, phases=[1, 4])], [route("r", [step("p", units=[2])])])
+    events = run(w, phase=1)
+    assert starts(events, "p")[0][2] == 1
+
+
+def test_alternative_devices_share_the_load():
+    w = wf([dev("m1", 10), dev("m2", 10)], [route("r", [step("m1", "m2")], count=2)])
+    events = run(w)
+    assert done(events) == [10, 10]
+    assert {e.device for e in events if e.kind == "process_start"} == {"m1", "m2"}
+
+
+def test_join_runs_both_items_together_on_one_device_unit():
+    w = wf(
+        [dev("a", 1), dev("echo", 7)],
+        [route("crystal", [step("a"), step("echo", join="soak")]), route("compound", [step("echo", join="soak")])],
     )
-    assert completions(run(cfg, n=2)) == [15, 20]
+    events = run(w)
+    s = starts(events, "echo")
+    assert [t for t, _, _ in s] == [1, 1] and len({u for _, _, u in s}) == 1
+    assert done(events) == [8, 8]
 
 
-def test_partial_final_batch_still_runs():
-    events = run(lab([station("s1", 10, batch_size=4)]), n=10)
-    assert completions(events) == [10] * 4 + [20] * 4 + [30] * 2
-    assert {e.batch for e in events if e.kind == "process_start"} == {1, 2, 3}
-
-
-def test_batch_waits_to_fill_then_runs_remainder():
-    events = run(lab([station("s1", 10, batch_size=2)]), n=3, interval=5)
-    assert completions(events) == [15, 15, 25]
-
-
-def test_full_buffer_blocks_upstream_station():
-    cfg = lab([station("s1", 1), station("s2", 10, buffer_size=1)])
-    events = run(cfg, n=3)
-    leave = [e.t for e in events if e.kind == "move_start" and e.at == "s1" and e.sample == 3]
-    assert leave == [11]
-    assert completions(events) == [11, 21, 31]
-
-
-def test_same_seed_is_reproducible_and_different_seed_differs():
-    noisy = TimeSpec(value=10, kind="normal", spread=3)
-    cfg = lab([station("s1", 0).model_copy(update={"process_time": noisy})])
-    a = run(cfg, n=20, seed=42)
-    assert a == run(cfg, n=20, seed=42)
-    assert a != run(cfg, n=20, seed=43)
-
-
-def test_event_times_never_decrease():
-    cfg = lab(
-        [station("s1", 3, capacity=2), station("s2", 7, batch_size=3, buffer_size=3)],
-        [transfer("s1", "s2", 2, arm="a")],
-        arms=["a"],
+def test_looping_partner_serves_several_joins():
+    w = wf(
+        [dev("peel", 1), dev("echo", 7)],
+        [
+            route("crystal", [step("echo", join="soak")], count=3, interval=100),
+            route("compound", [step("peel"), step("echo", join="soak")], loop=Loop(start=0, end=1, times=3)),
+        ],
     )
-    times = [e.t for e in run(cfg, n=25, interval=1)]
-    assert times == sorted(times)
+    events = run(w)
+    assert done(events, "crystal") == [8, 107, 207]  # first join waits for the compound peel (0-1 s)
+    assert done(events, "compound") == [207]
 
 
-def test_changing_one_station_does_not_reshuffle_randomness_elsewhere():
+def test_unmatched_join_leaves_items_unfinished_without_crashing():
+    w = wf([dev("echo", 7)], [route("crystal", [step("echo", join="k")], count=2), route("compound", [step("echo", join="k")])])
+    events = run(w)
+    assert len(done(events)) == 2  # one pair; the second crystal plate never meets a partner
+
+
+def test_join_without_active_partner_route_is_an_error():
+    w = wf([dev("echo", 7)], [route("crystal", [step("echo", join="k")]), route("compound", [step("echo", join="k")], enabled=False)])
+    with pytest.raises(WorkflowError, match="join 'k'"):
+        run(w)
+
+
+def test_dwell_frees_the_device():
+    w = wf([dev("a", 10), dev("b", 5)], [route("r", [step("a", dwell=TimeSpec(value=50)), step("b")], count=2)])
+    events = run(w)
+    assert [t for t, _, _ in starts(events, "a")] == [0, 10]
+    assert done(events) == [65, 75]
+
+
+def test_spawn_starts_items_on_another_route():
+    w = wf(
+        [dev("x", 10), dev("v", 3)],
+        [route("plates", [step("x", spawn=[Spawn(route="pins", count=2)])]), route("pins", [step("v")], count=0)],
+    )
+    events = run(w)
+    assert done(events, "pins") == [13, 16]
+
+
+def test_disabled_and_unavailable_optional_steps_are_skipped():
+    w = wf(
+        [dev("a", 1), dev("b", 5), dev("late", 9, phases=[4])],
+        [route("r", [step("a"), step("b", optional=True, enabled=False), step("late", optional=True)])],
+    )
+    events = run(w, phase=2)
+    assert {e.device for e in events if e.kind == "process_start"} == {"a"}
+
+
+def test_required_step_without_units_in_phase_is_an_error():
+    w = wf([dev("xl200", 300, phases=[3])], [route("crystal", [step("xl200")])])
+    with pytest.raises(WorkflowError, match="XL200.*phase 2"):
+        run(w, phase=2)
+
+
+def test_scenario_selects_routes():
+    w = wf([dev("a", 1)], [route("soak", [step("a")], scenarios=["run"]), route("seed", [step("a")], scenarios=["shutdown"])])
+    assert {e.route for e in run(w, scenario="shutdown")} == {"seed"}
+
+
+def test_one_cobot_serialises_moves_and_holds_the_device_until_pickup():
+    w = wf([dev("a", 10), dev("b", 0)], [route("r", [step("a"), step("b")], count=2)], move=5)
+    events = run(w, cobots=1)
+    item1_leaves_a = next(e.t for e in events if e.kind == "move_start" and e.step == 0 and e.item == 1)
+    item2_starts_a = next(t for t, i, _ in starts(events, "a") if i == 2)
+    assert item2_starts_a == item1_leaves_a
+    moves = sorted((e.t, e.kind) for e in events if e.kind in ("move_start", "move_end"))
+    assert all(a[1] != b[1] for a, b in zip(moves, moves[1:]))  # never two moves at once
+
+
+def test_no_cobots_means_unlimited_manual_moves():
+    w = wf([dev("a", 0)], [route("r", [step("a")], count=3)], move=5)
+    assert done(run(w, cobots=0)) == [5, 5, 5]
+
+
+def test_releases_follow_count_interval_and_offset():
+    w = wf([dev("a", 1, units=None)], [route("r", [step("a")], count=3, interval=900, offset=450)])
+    assert [e.t for e in run(w) if e.kind == "released"] == [450, 1350, 2250]
+
+
+def test_single_mode_releases_one_item_per_route():
+    w = wf([dev("a", 1, units=None)], [route("r1", [step("a")], count=5), route("r2", [step("a")], count=5)])
+    assert len(done(run(w, single=True))) == 2
+
+
+def test_same_seed_reproducible():
     noisy = TimeSpec(value=10, kind="normal", spread=3)
-    a = station("a", 0).model_copy(update={"process_time": noisy})
-    b = station("b", 0).model_copy(update={"process_time": noisy})
-    before = run(lab([a, b]), n=10, seed=5)
-    after = run(lab([a.model_copy(update={"process_time": TimeSpec(value=4)}), b]), n=10, seed=5)
-    durations = lambda evs: [e.t for e in evs if e.kind == "process_end" and e.at == "b"]
-    starts = lambda evs: [e.t for e in evs if e.kind == "process_start" and e.at == "b"]
-    gaps = lambda evs: [x - y for x, y in zip(durations(evs), starts(evs))]
-    assert gaps(after) == pytest.approx(gaps(before))
+    w = wf([dev("a", 0).model_copy(update={"time": noisy})], [route("r", [step("a")], count=10)])
+    assert run(w, seed=4) == run(w, seed=4)
+    assert run(w, seed=4) != run(w, seed=5)

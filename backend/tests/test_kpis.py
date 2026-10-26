@@ -1,81 +1,90 @@
 import pytest
 
-from axlr8.engine import simulate
 from axlr8.kpis import compute_kpis
-from axlr8.model import INPUT, OUTPUT, RunSettings, TimeSpec
-from conftest import lab, station, transfer
+from axlr8.model import RunSettings, TimeSpec
+from conftest import dev, route, run, step, wf
 
 
-def kpis_for(cfg, n=1, interval=0.0, seed=None):
-    events = simulate(cfg, RunSettings(num_samples=n, arrival_interval=interval, seed=seed))
-    return compute_kpis(cfg, events), events
+def kpis(w, **kw):
+    return compute_kpis(w, RunSettings(**kw), run(w, **kw))
 
 
-def test_single_station_queue_statistics():
-    k, _ = kpis_for(lab([station("s1", 10)]), n=3)
-    assert k.num_samples == 3
+def by_id(rows, rid):
+    return next(r for r in rows if r.id == rid)
+
+
+def test_device_queue_statistics():
+    k = kpis(wf([dev("p", 10)], [route("r", [step("p")], count=3)]))
     assert k.makespan == 30
-    assert k.throughput_per_hour == pytest.approx(360)
-    assert (k.avg_cycle_time, k.min_cycle_time, k.max_cycle_time) == (20, 10, 30)
-    s = k.stations[0]
-    assert s.utilisation == pytest.approx(1.0)
-    assert (s.avg_wait, s.max_wait) == (10, 20)
-    assert s.avg_queue == pytest.approx(1.0)
-    assert s.max_queue == 2
-    assert s.batches == 3
+    p = by_id(k.devices, "p")
+    assert (p.units, p.uses) == (1, 3)
+    assert p.utilisation == pytest.approx(1.0)
+    assert (p.avg_wait, p.max_wait, p.max_queue) == (10, 20, 2)
+    r = by_id(k.routes, "r")
+    assert (r.released, r.completed, r.avg_cycle_time) == (3, 3, 20)
+    assert r.throughput_per_hour == pytest.approx(360)
 
 
-def test_slowest_station_is_the_bottleneck():
-    k, _ = kpis_for(lab([station("s1", 10), station("s2", 30)]), n=5)
-    assert k.bottleneck.id == "s2" and k.bottleneck.kind == "station"
-    assert k.bottleneck.utilisation == pytest.approx(150 / 160)
+def test_join_counts_one_device_run():
+    w = wf([dev("echo", 7)], [route("a", [step("echo", join="k")]), route("b", [step("echo", join="k")])])
+    e = by_id(kpis(w).devices, "echo")
+    assert e.uses == 1 and e.utilisation == pytest.approx(1.0)
 
 
-def test_slow_arm_is_the_bottleneck():
-    cfg = lab(
-        [station("s1", 1)],
-        [transfer(INPUT, "s1", 20, arm="a"), transfer("s1", OUTPUT, 20, arm="a")],
-        arms=["a"],
-    )
-    k, _ = kpis_for(cfg, n=4)
-    assert k.bottleneck.kind == "arm" and k.bottleneck.id == "a"
+def test_utilisation_is_shared_over_units():
+    k = kpis(wf([dev("p", 10, units=2)], [route("r", [step("p")], count=2)]))
+    assert by_id(k.devices, "p").utilisation == pytest.approx(1.0)
+    k = kpis(wf([dev("p", 10, units=2)], [route("r", [step("p")], count=1)]))
+    assert by_id(k.devices, "p").utilisation == pytest.approx(0.5)
 
 
-def test_blocked_time_is_reported_on_upstream_station():
-    k, _ = kpis_for(lab([station("s1", 1), station("s2", 10, buffer_size=1)]), n=3)
-    assert k.stations[0].blocked_fraction == pytest.approx(8 / 31)
+def test_unlimited_devices_are_never_the_bottleneck():
+    k = kpis(wf([dev("map", 50, units=None), dev("p", 1)], [route("r", [step("map"), step("p")])]))
+    assert by_id(k.devices, "map").utilisation is None
+    assert k.bottleneck.id == "p"
 
 
-def test_arm_statistics():
-    cfg = lab(
-        [station("s1", 0)],
-        [transfer(INPUT, "s1", 5, arm="a"), transfer("s1", OUTPUT, 5, arm="a")],
-        arms=["a"],
-    )
-    k, _ = kpis_for(cfg, n=2)
-    a = k.arms[0]
-    assert a.moves == 4
-    assert a.utilisation == pytest.approx(1.0)
-    assert a.avg_wait == pytest.approx(3.75)
+def test_cobot_statistics_and_cobot_bottleneck():
+    w = wf([dev("a", 1)], [route("r", [step("a")], count=2)], move=10)
+    k = kpis(w, cobots=1)
+    assert k.cobots.count == 1 and k.cobots.moves == 2
+    assert k.cobots.avg_wait == pytest.approx(5)
+    assert k.cobots.utilisation == pytest.approx(20 / 21)
+    assert k.bottleneck.kind == "cobot"
 
 
-def test_littles_law_holds_for_station_queues():
-    noisy = TimeSpec(value=10, kind="triangular", spread=6)
-    cfg = lab([station("s1", 0).model_copy(update={"process_time": noisy}), station("s2", 8, capacity=2)])
-    k, events = kpis_for(cfg, n=50, interval=4, seed=7)
-    for s in k.stations:
-        total_wait = s.avg_wait * 50
-        assert s.avg_queue * k.makespan == pytest.approx(total_wait)
+def test_device_blocked_while_waiting_for_a_cobot():
+    # each item finishes on `a` while the only cobot is busy moving the other one
+    w = wf([dev("a", 1), dev("b", 0)], [route("r", [step("a"), step("b")], count=2)], move=5)
+    k = kpis(w, cobots=1)
+    a = by_id(k.devices, "a")
+    assert a.blocked_fraction * k.makespan == pytest.approx(8)  # 6-10 s and 11-15 s
 
 
-def test_all_zero_times_do_not_divide_by_zero():
-    k, _ = kpis_for(lab([station("s1", 0)]), n=3)
-    assert k.makespan == 0
-    assert k.throughput_per_hour is None
-    assert k.stations[0].utilisation == 0
-    assert k.bottleneck is None
+def test_dwell_does_not_count_as_busy():
+    w = wf([dev("a", 10)], [route("r", [step("a", dwell=TimeSpec(value=90))])])
+    k = kpis(w)
+    assert k.makespan == 100
+    a = by_id(k.devices, "a")
+    assert a.utilisation == pytest.approx(0.1) and a.blocked_fraction == 0
 
 
-def test_no_arms_gives_empty_arm_list():
-    k, _ = kpis_for(lab([station("s1", 1)]))
-    assert k.arms == []
+def test_keeps_up_with_release_rate():
+    ok = kpis(wf([dev("p", 600)], [route("r", [step("p")], count=8, interval=900)]))
+    late = kpis(wf([dev("p", 1200)], [route("r", [step("p")], count=8, interval=900)]))
+    assert by_id(ok.routes, "r").keeps_up is True
+    assert by_id(late.routes, "r").keeps_up is False
+
+
+def test_stuck_items_are_reported():
+    w = wf([dev("echo", 7)], [route("a", [step("echo", join="k")], count=2), route("b", [step("echo", join="k")])])
+    k = kpis(w)
+    assert [(s.route, s.step) for s in k.stuck] == [("a", 0)]
+    assert by_id(k.routes, "a").completed == 1
+
+
+def test_bottleneck_ranking_is_sorted():
+    w = wf([dev("slow", 30), dev("fast", 5)], [route("r", [step("fast"), step("slow")], count=4)])
+    k = kpis(w)
+    assert [b.id for b in k.ranking[:2]] == ["slow", "fast"]
+    assert k.bottleneck.id == "slow"

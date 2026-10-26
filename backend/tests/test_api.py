@@ -7,53 +7,55 @@ from fastapi.testclient import TestClient
 from axlr8.api import app
 
 client = TestClient(app)
-EXAMPLE = json.loads((Path(__file__).resolve().parents[2] / "examples" / "simple_lab.json").read_text())
+AXL = json.loads((Path(__file__).resolve().parents[2] / "examples" / "axl_workflow.json").read_text())
 
 
 def test_health():
     assert client.get("/api/health").json() == {"status": "ok"}
 
 
-def test_simulate_example_returns_events_and_kpis():
-    r = client.post("/api/simulate", json={"lab": EXAMPLE, "run": {"num_samples": 12, "seed": 1}})
+@pytest.mark.parametrize("scenario", ["run", "shutdown"])
+def test_axl_workflow_runs_to_completion(scenario):
+    r = client.post("/api/simulate", json={"workflow": AXL, "run": {"scenario": scenario, "seed": 1}})
     assert r.status_code == 200
-    body = r.json()
-    assert body["kpis"]["num_samples"] == 12
-    assert sum(1 for e in body["events"] if e["kind"] == "completed") == 12
-    assert body["kpis"]["bottleneck"] is not None
+    k = r.json()["kpis"]
+    assert k["stuck"] == []
+    assert k["completed"] == k["released"] > 0
+    assert k["bottleneck"] is not None
 
 
-def test_invalid_transfer_is_422_with_message():
-    bad = {**EXAMPLE, "transfers": [{"from_id": "input", "to_id": "nowhere", "time": {"value": 1}}]}
-    r = client.post("/api/simulate", json={"lab": bad})
+def test_daily_schedule_soaking_keeps_up_with_15_minute_release():
+    k = client.post("/api/simulate", json={"workflow": AXL, "run": {"seed": 1}}).json()["kpis"]
+    soaks = [r for r in k["routes"] if r["id"].startswith("soak_")]
+    assert len(soaks) == 2 and all(r["keeps_up"] for r in soaks)
+
+
+def test_missing_devices_for_phase_is_422_with_reason():
+    r = client.post("/api/simulate", json={"workflow": AXL, "run": {"phase": 2}})
     assert r.status_code == 422
-    assert "unknown location" in r.text
+    assert "XL200" in r.text and "phase 2" in r.text
 
 
-def test_too_many_samples_is_422():
-    r = client.post("/api/simulate", json={"lab": EXAMPLE, "run": {"num_samples": 2001}})
-    assert r.status_code == 422
+def test_go_releases_one_item_per_route():
+    k = client.post("/api/simulate", json={"workflow": AXL, "run": {"single": True, "seed": 1}}).json()["kpis"]
+    by = {r["id"]: r["released"] for r in k["routes"]}
+    assert by["crystal_plates"] == 1 and by["soak_1"] == 1
+    assert k["stuck"] == []  # loops run once, so looping partners do not wait for joins that never come
 
 
-def test_examples_listing_and_fetch():
-    assert "simple_lab" in client.get("/api/examples").json()
-    r = client.get("/api/examples/simple_lab")
-    assert r.status_code == 200 and r.json()["name"] == "Sample prep line"
+def test_invalid_workflow_is_422():
+    bad = {**AXL, "routes": [{"id": "r", "name": "r", "steps": [{"devices": ["nope"]}]}]}
+    r = client.post("/api/simulate", json={"workflow": bad})
+    assert r.status_code == 422 and "unknown device" in r.text
 
 
-@pytest.mark.parametrize("name", ["missing", "..%2Fbackend%2Fpyproject", "a.b"])
-def test_unknown_or_unsafe_example_is_404(name):
-    assert client.get(f"/api/examples/{name}").status_code == 404
-
-
-def test_nan_in_request_is_422_not_500():
-    body = '{"lab": {"stations": [{"id": "a", "name": "A", "process_time": {"value": NaN}}]}}'
+def test_nan_is_422_not_500():
+    body = '{"workflow": {"devices": [{"id": "a", "name": "A", "time": {"value": NaN}}], "routes": []}}'
     r = client.post("/api/simulate", content=body, headers={"Content-Type": "application/json"})
     assert r.status_code == 422
 
 
-def test_oversized_run_is_rejected():
-    stations = [{"id": f"s{i}", "name": "S", "process_time": {"value": 1}} for i in range(30)]
-    r = client.post("/api/simulate", json={"lab": {"stations": stations}, "run": {"num_samples": 2000}})
-    assert r.status_code == 422
-    assert "too large" in r.text
+def test_examples():
+    assert client.get("/api/examples").json() == ["axl_workflow"]
+    assert client.get("/api/examples/axl_workflow").json()["name"] == "AXL workflow"
+    assert client.get("/api/examples/..%2Fx").status_code == 404

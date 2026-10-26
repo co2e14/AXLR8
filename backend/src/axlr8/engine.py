@@ -1,133 +1,265 @@
-"""SimPy discrete-event simulation of samples flowing along the lab route.
+"""SimPy discrete-event simulation of items flowing along routes that share devices.
 
 Produces a time-ordered event log; all statistics are derived from it in kpis.py.
-See docs/superpowers/plans/2026-10-26-m1-engine-api.md for the flow semantics.
+
+Flow of one item through one step:
+  1. `move_ready`: it is ready to leave where it is (it keeps that device occupied meanwhile).
+  2. It waits for a cobot if the move needs one, then `move_start` (previous device freed) ...
+  3. ... `move_end` at the step.
+  4. If the step is a join, it waits for an item from the partner route at the same join.
+  5. It takes a free unit of one of the step's devices: `process_start` ... `process_end`.
+  6. Optional dwell (e.g. incubation) frees the device, then `dwell_end`.
 """
 
 import random
 from collections.abc import Callable
+from dataclasses import dataclass, field
 
 import simpy
-from simpy.resources.resource import Request
 
-from axlr8.model import INPUT, OUTPUT, Event, LabConfig, RunSettings, Station
+from axlr8.model import Event, Route, RunSettings, Step, Workflow
 from axlr8.timing import sample_time
 
-Log = Callable[[Event], None]
+
+class WorkflowError(ValueError):
+    """The workflow cannot run with these settings (e.g. a required device is not bought yet)."""
 
 
-class _StationSim:
-    """Queue + slots for one station, with a dispatcher that forms batches."""
-
-    def __init__(self, env: simpy.Environment, station: Station, total_samples: int,
-                 rng: random.Random, log: Log):
-        self.env, self.station, self.rng, self.log = env, station, rng, log
-        self.slots = simpy.Resource(env, capacity=station.capacity)
-        self.buffer = simpy.Resource(env, capacity=station.buffer_size) if station.buffer_size else None
-        self.queue: list[tuple[int, simpy.Event, Request | None]] = []
-        self.yet_to_arrive = total_samples
-        self.batches = 0
-        self.wakeup = env.event()
-        env.process(self._dispatch())
-
-    def enqueue(self, sample: int, buffer_req: Request | None) -> simpy.Event:
-        """Join the queue. The returned event fires at process end with a `leave` event
-        the sample must trigger when it is picked up."""
-        done = self.env.event()
-        self.queue.append((sample, done, buffer_req))
-        self.yet_to_arrive -= 1
-        if not self.wakeup.triggered:
-            self.wakeup.succeed()
-        return done
-
-    def _batch_ready(self) -> bool:
-        n = len(self.queue)
-        return n > 0 and (n >= self.station.batch_size or self.yet_to_arrive == 0)
-
-    def _dispatch(self):
-        while True:
-            while not self._batch_ready():
-                yield self.wakeup
-                self.wakeup = self.env.event()
-            slot = self.slots.request()
-            yield slot
-            size = self.station.batch_size
-            batch, self.queue = self.queue[:size], self.queue[size:]
-            self.env.process(self._run_batch(slot, batch))
-
-    def _run_batch(self, slot, batch):
-        self.batches += 1
-        batch_id, sid = self.batches, self.station.id
-        for sample, _, buf in batch:
-            if buf is not None:
-                self.buffer.release(buf)
-            self.log(Event(t=self.env.now, sample=sample, kind="process_start", at=sid, batch=batch_id))
-        yield self.env.timeout(sample_time(self.station.process_time, self.rng))
-        leaves = []
-        for sample, done, _ in batch:
-            self.log(Event(t=self.env.now, sample=sample, kind="process_end", at=sid, batch=batch_id))
-            leave = self.env.event()
-            leaves.append(leave)
-            done.succeed(leave)
-        yield self.env.all_of(leaves)
-        self.slots.release(slot)
+def active_routes(wf: Workflow, run: RunSettings) -> list[Route]:
+    return [r for r in wf.routes if r.enabled and run.scenario in r.scenarios]
 
 
-def _sample(env, k, lab, stations, arms, rng_for, log):
-    log(Event(t=env.now, sample=k, kind="released", at=INPUT))
-    locs = lab.locations()
-    leave_here = None
-    for here, there in zip(locs, locs[1:]):
-        transfer = lab.transfer_for(here, there)
-        dest = stations.get(there)
-        buf = None
-        if dest is not None and dest.buffer is not None:
-            buf = dest.buffer.request()
-            yield buf
-        log(Event(t=env.now, sample=k, kind="dest_reserved", at=here, to=there))
-        arm_req = None
-        if transfer.arm is not None:
-            arm_req = arms[transfer.arm].request()
-            yield arm_req
-        log(Event(t=env.now, sample=k, kind="move_start", at=here, to=there, arm=transfer.arm))
-        if leave_here is not None:
-            leave_here.succeed()
-        yield env.timeout(sample_time(transfer.time, rng_for(f"transfer:{here}>{there}")))
-        if arm_req is not None:
-            arms[transfer.arm].release(arm_req)
-        log(Event(t=env.now, sample=k, kind="move_end", at=there, arm=transfer.arm))
-        if dest is None:
-            log(Event(t=env.now, sample=k, kind="completed", at=OUTPUT))
-        else:
-            leave_here = yield dest.enqueue(k, buf)
+def _available(wf: Workflow, device_id: str, phase: int) -> bool:
+    units = wf.device(device_id).units_in_phase(phase)
+    return units is None or len(units) > 0
 
 
-def _arrivals(env, run: RunSettings, start_sample):
-    for k in range(1, run.num_samples + 1):
-        if k > 1 and run.arrival_interval > 0:
-            yield env.timeout(run.arrival_interval)
-        start_sample(k)
+def active_sequence(wf: Workflow, route: Route, phase: int, single: bool = False) -> list[int]:
+    """Step indices the item visits: loop unrolled, switched-off and unavailable optional steps removed.
+    In single mode (GO) a loop runs once, matching the one partner item each route releases."""
+    seq = route.sequence() if not single or route.loop is None else list(range(len(route.steps)))
+    out = []
+    for i in seq:
+        s = route.steps[i]
+        if not s.enabled:
+            continue
+        if s.optional and not any(_available(wf, d, phase) for d in s.devices):
+            continue
+        out.append(i)
+    return out
 
 
-def simulate(lab: LabConfig, run: RunSettings) -> list[Event]:
-    env = simpy.Environment()
-    # One random stream per station/transfer, so editing one part of the lab leaves the
-    # random draws everywhere else unchanged (keeps scenario comparisons fair).
-    root = run.seed if run.seed is not None else random.SystemRandom().randrange(2**63)
-    streams: dict[str, random.Random] = {}
+def check_runnable(wf: Workflow, run: RunSettings) -> None:
+    routes = active_routes(wf, run)
+    if not routes:
+        raise WorkflowError(f"no routes are switched on for the {run.scenario} scenario")
+    problems = []
+    joins: dict[str, set[str]] = {}
+    for r in routes:
+        for i in sorted(set(active_sequence(wf, r, run.phase))):
+            s = r.steps[i]
+            if not any(_available(wf, d, run.phase) for d in s.devices):
+                names = " or ".join(wf.device(d).name for d in s.devices)
+                problems.append(f"route '{r.name}' step {i + 1} needs {names}, which is not available in phase {run.phase}")
+            if s.join:
+                joins.setdefault(s.join, set()).add(r.id)
+    for key, members in joins.items():
+        if len(members) < 2:
+            only = wf.route(next(iter(members))).name
+            problems.append(f"join '{key}' in route '{only}' has no partner route switched on")
+    if problems:
+        raise WorkflowError("; ".join(problems))
 
-    def rng_for(key: str) -> random.Random:
-        if key not in streams:
-            streams[key] = random.Random(f"{root}:{key}")
-        return streams[key]
 
-    events: list[Event] = []
-    log = events.append
-    stations = {s.id: _StationSim(env, s, run.num_samples, rng_for(f"station:{s.id}"), log) for s in lab.stations}
-    arms = {a.id: simpy.Resource(env, capacity=1) for a in lab.arms}
-    env.process(_arrivals(env, run, lambda k: env.process(_sample(env, k, lab, stations, arms, rng_for, log))))
-    env.run()
-    done = sum(1 for e in events if e.kind == "completed")
-    if done != run.num_samples:
-        raise RuntimeError(f"simulation stalled: {done} of {run.num_samples} samples completed")
+@dataclass
+class _Hold:
+    """A device unit held by one item, or shared by the two items of a join."""
+
+    store: simpy.FilterStore | None
+    unit: int | None
+    refs: int = 1
+
+    def release(self) -> None:
+        self.refs -= 1
+        if self.refs == 0 and self.store is not None:
+            self.store.put(self.unit)
+
+
+@dataclass
+class _Waiter:
+    item: int
+    route: Route
+    step: int
+    done: simpy.Event
+
+
+@dataclass
+class _Sim:
+    wf: Workflow
+    run: RunSettings
+    env: simpy.Environment = field(default_factory=simpy.Environment)
+    events: list[Event] = field(default_factory=list)
+    next_item: int = 0
+
+    def __post_init__(self):
+        self._root = self.run.seed if self.run.seed is not None else random.SystemRandom().randrange(2**63)
+        self._streams: dict[str, random.Random] = {}
+        self.stores: dict[str, simpy.FilterStore | None] = {}
+        self.units: dict[str, list[int] | None] = {}
+        for d in self.wf.devices:
+            units = d.units_in_phase(self.run.phase)
+            self.units[d.id] = units
+            if units is None:
+                self.stores[d.id] = None
+            else:
+                store = simpy.FilterStore(self.env)
+                store.items = list(units)
+                self.stores[d.id] = store
+        cobots = self.run.cobots if self.run.cobots is not None else self.wf.cobots_by_phase.get(self.run.phase, 0)
+        self.cobots = cobots
+        self.arms = simpy.Resource(self.env, capacity=cobots) if cobots > 0 else None
+        self.joins: dict[str, list[_Waiter]] = {}
+        self.sequences = {r.id: active_sequence(self.wf, r, self.run.phase, self.run.single) for r in self.wf.routes}
+        self.active = {r.id for r in active_routes(self.wf, self.run)}
+
+    # One random stream per step/move, so editing one part leaves the draws elsewhere unchanged.
+    def rng(self, key: str) -> random.Random:
+        if key not in self._streams:
+            self._streams[key] = random.Random(f"{self._root}:{key}")
+        return self._streams[key]
+
+    def log(self, **kw) -> None:
+        self.events.append(Event(t=self.env.now, **kw))
+
+    def _logger(self, item: int, route: Route) -> Callable[..., None]:
+        return lambda **kw: self.log(item=item, route=route.id, **kw)
+
+    def start_item(self, route: Route) -> None:
+        self.next_item += 1
+        self.env.process(self._item(self.next_item, route))
+
+    def _release_all(self, route: Route):
+        n = 1 if self.run.single else route.count
+        for k in range(n):
+            delay = route.offset + k * route.interval
+            if delay > self.env.now:
+                yield self.env.timeout(delay - self.env.now)
+            self.start_item(route)
+
+    def _item(self, item: int, route: Route):
+        log = self._logger(item, route)
+        log(kind="released", step=-1)
+        hold: _Hold | None = None
+        prev = -1
+        for si in self.sequences[route.id]:
+            step = route.steps[si]
+            yield from self._move(log, route, prev, si, step, hold)
+            hold = yield from self._process(item, route, si, step, log)
+            if step.dwell is not None:
+                hold.release()
+                hold = None
+                yield self.env.timeout(sample_time(step.dwell, self.rng(f"dwell:{route.id}:{si}")))
+                log(kind="dwell_end", step=si)
+            prev = si
+        if hold is not None:
+            hold.release()
+        log(kind="completed", step=prev)
+
+    def _move(self, log, route: Route, frm: int, to: int, step: Step, hold: _Hold | None):
+        log(kind="move_ready", step=frm, to=to)
+        if step.transport != "cobot":
+            log(kind="move_start", step=frm, to=to)
+            if hold is not None:
+                hold.release()
+            log(kind="move_end", step=to)
+            return
+        req = None
+        if self.arms is not None:
+            req = self.arms.request()
+            yield req
+        log(kind="move_start", step=frm, to=to, cobot=req is not None)
+        if hold is not None:
+            hold.release()
+        yield self.env.timeout(sample_time(self.wf.move_time, self.rng(f"move:{route.id}:{to}")))
+        if req is not None:
+            self.arms.release(req)
+        log(kind="move_end", step=to, cobot=req is not None)
+
+    def _allowed(self, step: Step, device_id: str) -> list[int] | None:
+        units = self.units[device_id]
+        if units is None or step.units is None:
+            return units
+        pinned = [u for u in step.units if u in units]
+        return pinned or units  # pinned unit not bought in this phase: use any unit
+
+    def _acquire(self, step: Step):
+        """Wait for a free unit of any of the step's devices. Returns (device_id, hold)."""
+        options = [d for d in step.devices if _available(self.wf, d, self.run.phase)]
+        for d in options:
+            if self.stores[d] is None:
+                return d, _Hold(None, None)
+        reqs = []
+        for d in options:
+            allowed = set(self._allowed(step, d))
+            reqs.append((d, self.stores[d].get(lambda u, allowed=allowed: u in allowed)))
+        result = yield self.env.any_of([r for _, r in reqs])
+        device, req = next((d, r) for d, r in reqs if r in result)
+        for d, r in reqs:
+            if r is req:
+                continue
+            if r.triggered:
+                self.stores[d].put(r.value)
+            else:
+                r.cancel()
+        return device, _Hold(self.stores[device], req.value)
+
+    def _process(self, item: int, route: Route, si: int, step: Step, log):
+        partner: _Waiter | None = None
+        if step.join:
+            queue = self.joins.setdefault(step.join, [])
+            partner = next((w for w in queue if w.route.id != route.id), None)
+            if partner is None:
+                waiter = _Waiter(item, route, si, self.env.event())
+                queue.append(waiter)
+                hold = yield waiter.done
+                return hold
+            queue.remove(partner)
+        device, hold = yield from self._acquire(step)
+        members = [(log, si, route)]
+        if partner is not None:
+            hold.refs = 2
+            members.append((self._logger(partner.item, partner.route), partner.step, partner.route))
+        for lg, s, _ in members:
+            lg(kind="process_start", step=s, device=device, unit=hold.unit)
+        spec = step.time or self.wf.device(device).time
+        yield self.env.timeout(sample_time(spec, self.rng(f"step:{route.id}:{si}")))
+        for lg, s, r in members:
+            lg(kind="process_end", step=s, device=device, unit=hold.unit)
+            for sp in r.steps[s].spawn:
+                target = self.wf.route(sp.route)
+                if target.id in self.active:
+                    for _ in range(sp.count):
+                        self.start_item(target)
+        if partner is not None:
+            partner.done.succeed(hold)
+        return hold
+
+    def go(self) -> list[Event]:
+        for r in active_routes(self.wf, self.run):
+            if r.count > 0:
+                self.env.process(self._release_all(r))
+        self.env.run()
+        return self.events
+
+
+MAX_EVENTS = 150_000  # keeps a response to roughly 15 MB
+
+
+def simulate(wf: Workflow, run: RunSettings) -> list[Event]:
+    check_runnable(wf, run)
+    events = _Sim(wf, run).go()
+    if len(events) > MAX_EVENTS:
+        raise WorkflowError(
+            f"run too large: {len(events):,} events (limit {MAX_EVENTS:,}). Release fewer items or use fewer loops."
+        )
     return events
