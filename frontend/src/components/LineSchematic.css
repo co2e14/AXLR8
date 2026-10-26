@@ -1,0 +1,133 @@
+.schematic-scroll {
+  overflow-x: auto;
+  padding: 8px 0 4px;
+}
+
+.schematic {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.schematic text {
+  fill: var(--ink);
+}
+
+.schematic .station,
+.schematic .transfer {
+  cursor: pointer;
+  outline: none;
+}
+
+.schematic .block {
+  fill: var(--panel);
+  stroke: var(--rule-strong);
+  stroke-width: 1.5;
+}
+
+.schematic .station:hover .block {
+  stroke: var(--ink-2);
+}
+
+.schematic .station.selected .block,
+.schematic .station:focus-visible .block {
+  stroke: var(--focus);
+  stroke-width: 2.5;
+}
+
+.schematic .station.bottleneck .block {
+  stroke: var(--bottleneck);
+  stroke-width: 2.5;
+  fill: var(--bottleneck-soft);
+}
+
+.schematic .bottleneck-label {
+  fill: var(--bottleneck);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.schematic .station-name {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.schematic .station-meta {
+  fill: var(--ink-2);
+  font-size: 13px;
+}
+
+.schematic .well {
+  fill: none;
+  stroke: var(--rule-strong);
+  stroke-dasharray: 2 2;
+}
+
+.schematic .token {
+  stroke: var(--panel);
+  stroke-width: 1.5;
+}
+
+.st-queued { fill: var(--st-queued); }
+.st-processing { fill: var(--st-processing); }
+.st-moving { fill: var(--st-moving); }
+.st-waiting { fill: var(--st-waiting); }
+.st-done { fill: var(--st-done); }
+.st-pending { fill: var(--st-pending); }
+
+.schematic .counts {
+  font-size: 12.5px;
+}
+
+.schematic .counts tspan {
+  fill: var(--ink-2);
+}
+
+.schematic .transfer .line {
+  fill: none;
+  stroke: var(--rule-strong);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.schematic .transfer.arm .line {
+  stroke-dasharray: none;
+  stroke: var(--ink-3);
+}
+
+.schematic .transfer.busy .line {
+  stroke: var(--st-moving);
+}
+
+.schematic .transfer.bottleneck .line {
+  stroke: var(--bottleneck);
+  stroke-width: 3;
+}
+
+.schematic .transfer.selected .line,
+.schematic .transfer:focus-visible .line {
+  stroke: var(--focus);
+  stroke-width: 3;
+}
+
+.schematic .transfer .hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16;
+}
+
+.schematic .transfer-label {
+  fill: var(--ink-2);
+  font-size: 13px;
+}
+
+.schematic .transfer-label.strong {
+  fill: var(--ink);
+  font-weight: 600;
+}
+
+.schematic .endbox rect {
+  fill: var(--panel-2);
+  stroke: var(--rule);
+  stroke-width: 1.5;
+}

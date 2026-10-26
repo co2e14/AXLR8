@@ -1,0 +1,97 @@
+@import '@fontsource-variable/archivo/wdth.css';
+
+:root {
+  --bench: #e8edf1;
+  --panel: #ffffff;
+  --panel-2: #f4f7f9;
+  --ink: #13202b;
+  --ink-2: #4a5966;
+  --ink-3: #74828e;
+  --rule: #cfd8df;
+  --rule-strong: #93a2ae;
+  --focus: #1f4fd8;
+
+  /* sample states — validated categorical set (light) */
+  --st-queued: #b07a00;
+  --st-processing: #008c7a;
+  --st-moving: #6a4de8;
+  --st-waiting: #d1433b;
+  --st-done: #9aa6b0;
+  --st-pending: #c3ccd3;
+
+  --bottleneck: #d1433b;
+  --bottleneck-soft: #fbe7e5;
+
+  --radius-block: 6px;
+  --radius-control: 4px;
+
+  font-family: 'Archivo Variable', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--bench);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bench: #0f171d;
+    --panel: #172129;
+    --panel-2: #1c2831;
+    --ink: #e6edf2;
+    --ink-2: #aab7c1;
+    --ink-3: #7f8d98;
+    --rule: #2b3843;
+    --rule-strong: #4d5d6a;
+    --focus: #7d9bff;
+
+    /* validated categorical set (dark) */
+    --st-queued: #c08a20;
+    --st-processing: #1fa39c;
+    --st-moving: #8e78ff;
+    --st-waiting: #e8584f;
+    --st-done: #5c6a75;
+    --st-pending: #36444f;
+
+    --bottleneck: #e8584f;
+    --bottleneck-soft: #3a2224;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bench);
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 650;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
