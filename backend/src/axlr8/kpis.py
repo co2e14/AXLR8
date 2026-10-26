@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from axlr8.engine import active_routes
+from axlr8.engine import plan_run
 from axlr8.model import Event, RunSettings, Workflow
 
 
@@ -56,8 +56,15 @@ class Bottleneck(BaseModel):
     utilisation: float
 
 
+class Skipped(BaseModel):
+    route: str
+    reason: str
+
+
 class Kpis(BaseModel):
     makespan: float
+    skipped: list[Skipped]  # switched-on routes that cannot run with this phase's equipment
+    warnings: list[str]
     released: int
     completed: int
     devices: list[DeviceStats]
@@ -184,7 +191,7 @@ def _route_stats(wf: Workflow, run: RunSettings, events: list[Event], makespan: 
         elif e.kind == "completed":
             completed[e.item] = e.t
     out = []
-    for r in active_routes(wf, run):
+    for r in plan_run(wf, run).routes:
         items = sorted(i for i, rid in route_of.items() if rid == r.id)
         cycles = [completed[i] - released[i] for i in items if i in completed]
         n_done = len(cycles)
@@ -224,8 +231,11 @@ def compute_kpis(wf: Workflow, run: RunSettings, events: list[Event]) -> Kpis:
         ranking.append(Bottleneck(id="cobots", name="Cobots", kind="cobot", utilisation=cobots.utilisation))
     ranking.sort(key=lambda b: -b.utilisation)
 
+    plan = plan_run(wf, run)
     return Kpis(
         makespan=makespan,
+        skipped=[Skipped(route=rid, reason=why) for rid, why in plan.skipped],
+        warnings=plan.warnings,
         released=sum(r.released for r in routes),
         completed=sum(r.completed for r in routes),
         devices=devices,

@@ -61,6 +61,7 @@ class Step(BaseModel):
     enabled: bool = True
     transport: Transport = "cobot"  # how the item gets into this step
     join: str | None = None  # rendezvous key: waits for an item from another route at a step with the same key
+    sync: str | None = None  # start key: waits for an item from another route, then each uses its own device
     spawn: list[Spawn] = []
 
 

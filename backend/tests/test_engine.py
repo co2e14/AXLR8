@@ -82,7 +82,7 @@ def test_unmatched_join_leaves_items_unfinished_without_crashing():
 
 def test_join_without_active_partner_route_is_an_error():
     w = wf([dev("echo", 7)], [route("crystal", [step("echo", join="k")]), route("compound", [step("echo", join="k")], enabled=False)])
-    with pytest.raises(WorkflowError, match="join 'k'"):
+    with pytest.raises(WorkflowError, match="meeting point 'k'"):
         run(w)
 
 
@@ -152,3 +152,68 @@ def test_same_seed_reproducible():
     w = wf([dev("a", 0).model_copy(update={"time": noisy})], [route("r", [step("a")], count=10)])
     assert run(w, seed=4) == run(w, seed=4)
     assert run(w, seed=4) != run(w, seed=5)
+
+
+# ---- review fixes ----
+from axlr8.engine import plan_run  # noqa: E402
+from axlr8.model import RunSettings  # noqa: E402
+
+
+def test_routes_needing_unbought_devices_are_skipped_not_fatal():
+    w = wf(
+        [dev("a", 1), dev("xl200", 300, phases=[3])],
+        [route("soak", [step("a")]), route("crystal", [step("xl200")])],
+    )
+    events = run(w, phase=2)
+    assert {e.route for e in events} == {"soak"}
+    plan = plan_run(w, RunSettings(phase=2))
+    assert [(r, "XL200" in why) for r, why in plan.skipped] == [("crystal", True)]
+
+
+def test_skipping_a_route_also_skips_its_join_partner():
+    w = wf(
+        [dev("a", 1), dev("late", 1, phases=[4]), dev("echo", 7)],
+        [
+            route("crystal", [step("late"), step("echo", join="k")]),
+            route("compound", [step("echo", join="k")]),
+            route("other", [step("a")]),
+        ],
+    )
+    plan = plan_run(w, RunSettings(phase=2))
+    assert sorted(r for r, _ in plan.skipped) == ["compound", "crystal"]
+    assert {e.route for e in run(w, phase=2)} == {"other"}
+
+
+def test_nothing_runnable_is_an_error():
+    w = wf([dev("xl200", 300, phases=[3])], [route("crystal", [step("xl200")])])
+    with pytest.raises(WorkflowError, match="XL200.*phase 2"):
+        run(w, phase=2)
+
+
+def test_pinned_unit_fallback_is_reported():
+    w = wf([dev("echo", 7, phases=[2, 4])], [route("soak_2", [step("echo", units=[2])])])
+    plan = plan_run(w, RunSettings(phase=3))
+    assert any("unit 2" in m and "ECHO" in m for m in plan.warnings)
+
+
+def test_event_limit_stops_the_run_early(monkeypatch):
+    import axlr8.engine as engine
+
+    monkeypatch.setattr(engine, "MAX_EVENTS", 50)
+    w = wf([dev("a", 1, units=None)], [route("r", [step("a")], count=500)])
+    with pytest.raises(WorkflowError, match="too large"):
+        run(w)
+
+
+def test_sync_makes_two_routes_start_a_step_together_on_their_own_devices():
+    w = wf(
+        [dev("spectroq", 25), dev("dc2sa", 25)],
+        [
+            route("crystal", [step("spectroq", sync="start")], count=2, interval=900, offset=100),
+            route("compound", [step("dc2sa", sync="start")], loop=Loop(start=0, end=0, times=2)),
+        ],
+    )
+    events = run(w)
+    starts_at = lambda d: [t for t, _, _ in starts(events, d)]
+    assert starts_at("spectroq") == [100, 1000]
+    assert starts_at("dc2sa") == [100, 1000]  # waits in storage for its crystal plate

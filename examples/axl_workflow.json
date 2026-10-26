@@ -108,12 +108,12 @@
         3
       ],
       "time": {
-        "value": 300.0,
+        "value": 120.0,
         "kind": "fixed",
         "spread": 0.0
       },
       "timing": "assumed",
-      "note": "Deck says 'batch'; per-plate time assumed"
+      "note": "Deck says 'batch'. 2 min per plate assumed: slide 2 runs two Mosquitos back to back at 5 min, so the LiHa must supply a plate every 2.5 min"
     },
     {
       "id": "centrifuge",
@@ -255,7 +255,7 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": "P4 unit is the relocated XChem Echo"
+      "note": "Unit 2 is the existing XChem Echo relocated in P4 (slide 3 lists it with quantity 0)"
     },
     {
       "id": "mosquito_lcp",
@@ -392,6 +392,7 @@
           "enabled": true,
           "transport": "manual",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -407,6 +408,7 @@
           "enabled": true,
           "transport": "manual",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -422,6 +424,7 @@
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -437,6 +440,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -452,6 +456,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -467,6 +472,7 @@
           "enabled": false,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -482,6 +488,7 @@
           "enabled": false,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -497,6 +504,7 @@
           "enabled": false,
           "transport": "linked",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
@@ -529,6 +537,7 @@
           "enabled": true,
           "transport": "manual",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -544,6 +553,7 @@
           "enabled": true,
           "transport": "manual",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -559,6 +569,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -574,6 +585,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -589,6 +601,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -604,6 +617,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -619,6 +633,7 @@
           "enabled": false,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -634,6 +649,7 @@
           "enabled": false,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
@@ -666,6 +682,7 @@
           "enabled": true,
           "transport": "manual",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -681,6 +698,7 @@
           "enabled": true,
           "transport": "manual",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -696,6 +714,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -711,6 +730,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -726,6 +746,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -741,6 +762,7 @@
           "enabled": false,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -756,6 +778,7 @@
           "enabled": false,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
@@ -788,6 +811,7 @@
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -803,6 +827,7 @@
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -818,6 +843,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -833,6 +859,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -848,6 +875,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -863,6 +891,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -879,6 +908,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": "mosquito",
+          "sync": null,
           "spawn": []
         },
         {
@@ -894,11 +924,12 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
       "loop": {
-        "start": 2,
+        "start": 6,
         "end": 6,
         "times": 8
       }
@@ -930,6 +961,7 @@
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -945,6 +977,7 @@
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -960,6 +993,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -976,6 +1010,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": "mosquito",
+          "sync": null,
           "spawn": []
         },
         {
@@ -991,6 +1026,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1006,6 +1042,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1021,6 +1058,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
@@ -1046,12 +1084,13 @@
           "units": null,
           "time": null,
           "dwell": null,
-          "timing": null,
+          "timing": "project",
           "label": "Retrieve grown plate",
           "optional": false,
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": "soak_1_start",
           "spawn": []
         },
         {
@@ -1069,6 +1108,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1086,6 +1126,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": "soak_1",
+          "sync": null,
           "spawn": []
         },
         {
@@ -1101,6 +1142,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1124,6 +1166,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1143,6 +1186,7 @@
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1160,6 +1204,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1179,6 +1224,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": [
             {
               "route": "pins",
@@ -1195,10 +1241,11 @@
           "dwell": null,
           "timing": null,
           "label": "Seal harvested plate",
-          "optional": false,
+          "optional": true,
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1210,10 +1257,11 @@
           "dwell": null,
           "timing": "project",
           "label": "Return plate to storage",
-          "optional": false,
+          "optional": true,
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
@@ -1239,12 +1287,13 @@
           "units": null,
           "time": null,
           "dwell": null,
-          "timing": null,
+          "timing": "project",
           "label": "Retrieve grown plate",
           "optional": false,
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": "soak_2_start",
           "spawn": []
         },
         {
@@ -1262,6 +1311,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1279,6 +1329,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": "soak_2",
+          "sync": null,
           "spawn": []
         },
         {
@@ -1294,6 +1345,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1317,6 +1369,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1336,6 +1389,7 @@
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1353,6 +1407,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1372,6 +1427,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": [
             {
               "route": "pins",
@@ -1388,10 +1444,11 @@
           "dwell": null,
           "timing": null,
           "label": "Seal harvested plate",
-          "optional": false,
+          "optional": true,
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1403,10 +1460,11 @@
           "dwell": null,
           "timing": "project",
           "label": "Return plate to storage",
-          "optional": false,
+          "optional": true,
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
@@ -1438,6 +1496,7 @@
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": "soak_1_start",
           "spawn": []
         },
         {
@@ -1450,11 +1509,12 @@
           "time": null,
           "dwell": null,
           "timing": null,
-          "label": null,
-          "optional": false,
+          "label": "Centrifuge*",
+          "optional": true,
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1472,6 +1532,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1489,6 +1550,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": "soak_1",
+          "sync": null,
           "spawn": []
         },
         {
@@ -1504,6 +1566,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1519,12 +1582,13 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
       "loop": {
-        "start": 2,
-        "end": 4,
+        "start": 0,
+        "end": 5,
         "times": 8
       }
     },
@@ -1554,6 +1618,7 @@
           "enabled": true,
           "transport": "linked",
           "join": null,
+          "sync": "soak_2_start",
           "spawn": []
         },
         {
@@ -1566,11 +1631,12 @@
           "time": null,
           "dwell": null,
           "timing": null,
-          "label": null,
-          "optional": false,
+          "label": "Centrifuge*",
+          "optional": true,
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1588,6 +1654,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1605,6 +1672,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": "soak_2",
+          "sync": null,
           "spawn": []
         },
         {
@@ -1620,6 +1688,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1635,12 +1704,13 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
       "loop": {
-        "start": 2,
-        "end": 4,
+        "start": 0,
+        "end": 5,
         "times": 8
       }
     },
@@ -1671,6 +1741,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1686,6 +1757,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
@@ -1717,6 +1789,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1732,6 +1805,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1747,6 +1821,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1762,6 +1837,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": [
             {
               "route": "seed_vitrification",
@@ -1782,6 +1858,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],
@@ -1813,6 +1890,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         },
         {
@@ -1829,6 +1907,7 @@
           "enabled": true,
           "transport": "cobot",
           "join": null,
+          "sync": null,
           "spawn": []
         }
       ],

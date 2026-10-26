@@ -30,10 +30,22 @@ def test_daily_schedule_soaking_keeps_up_with_15_minute_release():
     assert len(soaks) == 2 and all(r["keeps_up"] for r in soaks)
 
 
-def test_missing_devices_for_phase_is_422_with_reason():
-    r = client.post("/api/simulate", json={"workflow": AXL, "run": {"phase": 2}})
-    assert r.status_code == 422
-    assert "XL200" in r.text and "phase 2" in r.text
+@pytest.mark.parametrize("phase", [2, 3, 4])
+def test_every_phase_runs_what_its_equipment_allows(phase):
+    r = client.post("/api/simulate", json={"workflow": AXL, "run": {"phase": phase, "seed": 1}})
+    assert r.status_code == 200
+    k = r.json()["kpis"]
+    assert k["stuck"] == [] and k["completed"] > 0
+    skipped = {s["route"]: s["reason"] for s in k["skipped"]}
+    if phase == 2:
+        assert "crystal_plates" in skipped and "XL200" in skipped["crystal_plates"]
+    if phase == 4:
+        assert skipped == {}
+
+
+def test_phase_3_warns_that_workflow_2_shares_unit_1():
+    k = client.post("/api/simulate", json={"workflow": AXL, "run": {"phase": 3, "seed": 1}}).json()["kpis"]
+    assert any("Soak workflow 2" in w and "unit 2" in w for w in k["warnings"])
 
 
 def test_go_releases_one_item_per_route():

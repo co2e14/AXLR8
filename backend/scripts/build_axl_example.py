@@ -29,7 +29,8 @@ devices = [
     d("connect", "Connect", [4], 30, timing=A, note="Benchtop access for Arktik; reformatting point. Time not in deck"),
     d("dfsa", "DFSA STX-280 -20 °C", [4], 25, "storage"),
     d("xl200_thaw", "XL200 thawer", [3], 600, timing=A, note="Thaw time not in deck"),
-    d("xl200", "XL200 LiHa", [3], 300, timing=A, note="Deck says 'batch'; per-plate time assumed"),
+    d("xl200", "XL200 LiHa", [3], 120, timing=A,
+      note="Deck says 'batch'. 2 min per plate assumed: slide 2 runs two Mosquitos back to back at 5 min, so the LiHa must supply a plate every 2.5 min"),
     d("centrifuge", "VSpin centrifuge", [1, 4], 120),
     d("peeler", "XPEEL peeler", [1, 4], 18),
     d("plateloc", "PlateLoc foil sealer", [1, 4], 8),
@@ -38,7 +39,7 @@ devices = [
     d("benchcel", "BenchCel", [2], 20),
     d("labeller", "Plate labeller", [2], 10, timing=A, note="Time blank in deck"),
     d("dc2sa", "DC2SA compound storage", [2], 25, "storage"),
-    d("echo", "Echo 650T", [2, 4], 420, note="P4 unit is the relocated XChem Echo"),
+    d("echo", "Echo 650T", [2, 4], 420, note="Unit 2 is the existing XChem Echo relocated in P4 (slide 3 lists it with quantity 0)"),
     d("mosquito_lcp", "Mosquito LCP", [2], 300),
     d("mosquito_xtal3", "Mosquito Xtal3", [4], 300),
     d("xact", "X-ACT harvester", [2, 3, 3, 4, 4, 4], 2460),
@@ -63,7 +64,7 @@ def soak(n, units_xact, offset):
         "id": f"soak_{n}", "name": f"Soak workflow {n}", "group": "Soaking", "labware": "Crystal plates",
         "scenarios": ["run"], "count": 8, "interval": 900, "offset": offset,
         "steps": [
-            s("spectroq", transport="linked", label="Retrieve grown plate"),
+            s("spectroq", transport="linked", timing=P, sync=f"soak_{n}_start", label="Retrieve grown plate"),
             s("peeler", units=[n]),
             s("echo", units=[n], join=f"soak_{n}", label="Echo soak"),
             s("sealer"),
@@ -71,8 +72,8 @@ def soak(n, units_xact, offset):
             s("spectroq", time=IMAGING, timing=A, transport="linked", label="Post-soak imaging"),
             s("peeler", units=[n]),
             s("xact", units=units_xact, spawn=[{"route": "pins", "count": 1}]),
-            s("sealer", label="Seal harvested plate"),
-            s("spectroq", timing=P, label="Return plate to storage"),
+            s("sealer", optional=True, label="Seal harvested plate"),
+            s("spectroq", optional=True, timing=P, label="Return plate to storage"),
         ],
     }
 
@@ -82,14 +83,14 @@ def compound(n):
         "id": f"compound_{n}", "name": f"Compound plate {n}", "group": "Soaking", "labware": "Compound plate",
         "scenarios": ["run"], "count": 1,
         "steps": [
-            s("dc2sa", transport="linked", label="Retrieve compound plate"),
-            s("centrifuge", units=[n]),
+            s("dc2sa", transport="linked", sync=f"soak_{n}_start", label="Retrieve compound plate"),
+            s("centrifuge", units=[n], optional=True, label="Centrifuge*"),
             s("peeler", units=[n]),
             s("echo", units=[n], join=f"soak_{n}", label="Echo soak"),
             s("plateloc"),
             s("dc2sa", label="Return compound plate"),
         ],
-        "loop": {"start": 2, "end": 4, "times": 8},
+        "loop": {"start": 0, "end": 5, "times": 8},
     }
 
 
@@ -148,7 +149,7 @@ routes = [
             s("mosquito_xtal3", "mosquito_lcp", join="mosquito", label="Mosquito"),
             s("waste"),
         ],
-        "loop": {"start": 2, "end": 6, "times": 8},
+        "loop": {"start": 6, "end": 6, "times": 8},
     },
     {
         "id": "crystal_plates", "name": "Crystal plates", "group": "Crystallisation setup",

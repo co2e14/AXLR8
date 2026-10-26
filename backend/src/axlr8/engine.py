@@ -49,26 +49,79 @@ def active_sequence(wf: Workflow, route: Route, phase: int, single: bool = False
     return out
 
 
-def check_runnable(wf: Workflow, run: RunSettings) -> None:
-    routes = active_routes(wf, run)
-    if not routes:
-        raise WorkflowError(f"no routes are switched on for the {run.scenario} scenario")
-    problems = []
-    joins: dict[str, set[str]] = {}
-    for r in routes:
+@dataclass
+class RunPlan:
+    routes: list[Route]  # routes that will run
+    skipped: list[tuple[str, str]]  # (route id, reason) for switched-on routes that cannot run
+    warnings: list[str]
+
+
+def plan_run(wf: Workflow, run: RunSettings) -> RunPlan:
+    """Decide which switched-on routes can run with the equipment of `run.phase`.
+
+    A route is skipped when a required step has no device bought yet, or when a meeting point
+    (join/sync) it relies on has no partner route left running."""
+    candidates = active_routes(wf, run)
+    skipped: dict[str, str] = {}
+    for r in candidates:
         for i in sorted(set(active_sequence(wf, r, run.phase))):
             s = r.steps[i]
             if not any(_available(wf, d, run.phase) for d in s.devices):
                 names = " or ".join(wf.device(d).name for d in s.devices)
-                problems.append(f"route '{r.name}' step {i + 1} needs {names}, which is not available in phase {run.phase}")
-            if s.join:
-                joins.setdefault(s.join, set()).add(r.id)
-    for key, members in joins.items():
-        if len(members) < 2:
-            only = wf.route(next(iter(members))).name
-            problems.append(f"join '{key}' in route '{only}' has no partner route switched on")
-    if problems:
-        raise WorkflowError("; ".join(problems))
+                skipped[r.id] = f"step {i + 1} needs {names}, which is not available in phase {run.phase}"
+                break
+
+    def keys(r: Route) -> set[tuple[str, str]]:
+        seq = active_sequence(wf, r, run.phase)
+        out = set()
+        for i in seq:
+            if r.steps[i].join:
+                out.add(("join", r.steps[i].join))
+            if r.steps[i].sync:
+                out.add(("sync", r.steps[i].sync))
+        return out
+
+    changed = True
+    while changed:
+        changed = False
+        running = [r for r in candidates if r.id not in skipped]
+        for r in running:
+            for kind, key in sorted(keys(r)):
+                if not any(o.id != r.id and (kind, key) in keys(o) for o in running):
+                    word = "meeting point" if kind == "join" else "start point"
+                    skipped[r.id] = f"its {word} '{key}' has no partner route running"
+                    changed = True
+                    break
+
+    running = [r for r in candidates if r.id not in skipped]
+    if not running:
+        if not candidates:
+            raise WorkflowError(f"no routes are switched on for the {run.scenario} scenario")
+        raise WorkflowError("; ".join(f"route '{wf.route(rid).name}' cannot run: {why}" for rid, why in skipped.items()))
+
+    warnings = []
+    for r in running:
+        for i in sorted(set(active_sequence(wf, r, run.phase))):
+            s = r.steps[i]
+            if s.units and len(s.devices) == 1:
+                d = wf.device(s.devices[0])
+                have = d.units_in_phase(run.phase) or []
+                missing = [u for u in s.units if u not in have]
+                if missing and not any(u in have for u in s.units):
+                    unit_word = "unit" if len(missing) == 1 else "units"
+                    warnings.append(
+                        f"{r.name} step {i + 1} asks for {d.name} {unit_word} {'/'.join(map(str, missing))}, "
+                        f"not bought in phase {run.phase}; it shares the other units instead"
+                    )
+    by_join: dict[str, list[tuple[Route, int]]] = {}
+    for r in running:
+        for i, s in enumerate(r.steps):
+            if s.join and s.enabled:
+                by_join.setdefault(s.join, []).append((r, i))
+    for key, members in by_join.items():
+        if len({tuple(r.steps[i].devices) for r, i in members}) > 1:
+            warnings.append(f"meeting point '{key}' uses different devices in its routes; the later arrival's step is used")
+    return RunPlan(running, [(rid, why) for rid, why in skipped.items()], warnings)
 
 
 @dataclass
@@ -119,8 +172,10 @@ class _Sim:
         self.cobots = cobots
         self.arms = simpy.Resource(self.env, capacity=cobots) if cobots > 0 else None
         self.joins: dict[str, list[_Waiter]] = {}
+        self.syncs: dict[str, list[_Waiter]] = {}
         self.sequences = {r.id: active_sequence(self.wf, r, self.run.phase, self.run.single) for r in self.wf.routes}
-        self.active = {r.id for r in active_routes(self.wf, self.run)}
+        self.plan = plan_run(self.wf, self.run)
+        self.active = {r.id for r in self.plan.routes}
 
     # One random stream per step/move, so editing one part leaves the draws elsewhere unchanged.
     def rng(self, key: str) -> random.Random:
@@ -130,6 +185,10 @@ class _Sim:
 
     def log(self, **kw) -> None:
         self.events.append(Event(t=self.env.now, **kw))
+        if len(self.events) > MAX_EVENTS:
+            raise WorkflowError(
+                f"run too large: more than {MAX_EVENTS:,} events. Release fewer items, or use fewer repeats or spawns."
+            )
 
     def _logger(self, item: int, route: Route) -> Callable[..., None]:
         return lambda **kw: self.log(item=item, route=route.id, **kw)
@@ -154,6 +213,8 @@ class _Sim:
         for si in self.sequences[route.id]:
             step = route.steps[si]
             yield from self._move(log, route, prev, si, step, hold)
+            if step.sync:
+                yield from self._sync(item, route, si, step)
             hold = yield from self._process(item, route, si, step, log)
             if step.dwell is not None:
                 hold.release()
@@ -213,6 +274,18 @@ class _Sim:
                 r.cancel()
         return device, _Hold(self.stores[device], req.value)
 
+    def _sync(self, item: int, route: Route, si: int, step: Step):
+        """Wait until an item from another route reaches a step with the same start key."""
+        queue = self.syncs.setdefault(step.sync, [])
+        partner = next((w for w in queue if w.route.id != route.id), None)
+        if partner is not None:
+            queue.remove(partner)
+            partner.done.succeed()
+            return
+        waiter = _Waiter(item, route, si, self.env.event())
+        queue.append(waiter)
+        yield waiter.done
+
     def _process(self, item: int, route: Route, si: int, step: Step, log):
         partner: _Waiter | None = None
         if step.join:
@@ -245,7 +318,7 @@ class _Sim:
         return hold
 
     def go(self) -> list[Event]:
-        for r in active_routes(self.wf, self.run):
+        for r in self.plan.routes:
             if r.count > 0:
                 self.env.process(self._release_all(r))
         self.env.run()
@@ -256,10 +329,4 @@ MAX_EVENTS = 150_000  # keeps a response to roughly 15 MB
 
 
 def simulate(wf: Workflow, run: RunSettings) -> list[Event]:
-    check_runnable(wf, run)
-    events = _Sim(wf, run).go()
-    if len(events) > MAX_EVENTS:
-        raise WorkflowError(
-            f"run too large: {len(events):,} events (limit {MAX_EVENTS:,}). Release fewer items or use fewer loops."
-        )
-    return events
+    return _Sim(wf, run).go()
