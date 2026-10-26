@@ -1,23 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { asLabConfig } from './storage'
+import { asWorkflow } from './storage'
 
-describe('asLabConfig', () => {
-  it('accepts a well-formed lab', () => {
-    const lab = { name: 'x', stations: [{ id: 'a', name: 'A', process_time: { value: 1, kind: 'fixed', spread: 0 }, capacity: 1, batch_size: 1, buffer_size: null }], arms: [], transfers: [] }
-    expect(asLabConfig(lab)).toEqual(lab)
+const device = { id: 'a', name: 'A', kind: 'process', unit_phases: [1], time: { value: 1, kind: 'fixed', spread: 0 }, timing: 'fixed', note: '' }
+const route = { id: 'r', name: 'R', steps: [{ devices: ['a'] }] }
+
+describe('asWorkflow', () => {
+  it('accepts a well-formed workflow and fills defaults', () => {
+    const wf = asWorkflow({ name: 'x', devices: [device], routes: [route] })
+    expect(wf?.routes[0].steps[0]).toMatchObject({ devices: ['a'], enabled: true, transport: 'cobot', spawn: [] })
+    expect(wf?.move_time.value).toBe(30)
   })
   it.each([
-    ['missing stations', { name: 'old' }],
-    ['empty stations', { name: 'x', stations: [] }],
-    ['station without times', { name: 'x', stations: [{ id: 'a', name: 'A' }] }],
-    ['not an object', 'hello'],
+    ['old single-line lab', { name: 'old', stations: [] }],
+    ['no devices', { name: 'x', devices: [], routes: [route] }],
+    ['step without devices', { name: 'x', devices: [device], routes: [{ id: 'r', name: 'R', steps: [{}] }] }],
+    ['device without time', { name: 'x', devices: [{ id: 'a', name: 'A' }], routes: [route] }],
     ['null', null],
   ])('rejects %s', (_, value) => {
-    expect(asLabConfig(value)).toBeNull()
-  })
-  it('fills in missing arms and transfers', () => {
-    const lab = asLabConfig({ name: 'x', stations: [{ id: 'a', name: 'A', process_time: { value: 1, kind: 'fixed', spread: 0 }, capacity: 1, batch_size: 1, buffer_size: null }] })
-    expect(lab?.arms).toEqual([])
-    expect(lab?.transfers).toEqual([])
+    expect(asWorkflow(value)).toBeNull()
   })
 })

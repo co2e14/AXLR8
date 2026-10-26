@@ -14,7 +14,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
 
   reset = () => {
     try {
-      localStorage.removeItem('axlr8.lab')
+      localStorage.removeItem('axlr8.workflow')
     } catch {
       /* storage unavailable */
     }
@@ -25,11 +25,11 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     if (!this.state.error) return this.props.children
     return (
       <div className="crash" role="alert">
-        <h1>The lab could not be displayed</h1>
+        <h1>The workflow could not be displayed</h1>
         <p>{this.state.error.message}</p>
-        <p>Resetting loads the example lab. Save your lab to a file first if you can.</p>
+        <p>Resetting loads the AXL workflow from the deck. Save your workflow to a file first if you can.</p>
         <button type="button" className="primary" onClick={this.reset}>
-          Reset to the example lab
+          Reset to the AXL workflow
         </button>
       </div>
     )

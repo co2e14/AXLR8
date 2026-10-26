@@ -15,7 +15,7 @@ interface Row {
 }
 
 export function Compare({ baseline, current, onKeep }: { baseline: Baseline | null; current: Kpis | null; onKeep: () => void }) {
-  if (!current) return <p className="hint">Run a simulation first, then keep it as a baseline to compare changes against.</p>
+  if (!current) return <p className="hint">Run the schedule first, then keep it as a baseline to compare changes against.</p>
   if (!baseline)
     return (
       <div className="compare-empty">
@@ -25,19 +25,19 @@ export function Compare({ baseline, current, onKeep }: { baseline: Baseline | nu
     )
 
   const rows: Row[] = [
-    { label: 'Samples per hour', before: baseline.kpis.throughput_per_hour, after: current.throughput_per_hour, fmt: (v) => v.toFixed(1), higherIsBetter: true },
-    { label: 'Time to finish', before: baseline.kpis.makespan, after: current.makespan, fmt: fmtDuration, higherIsBetter: false },
-    { label: 'Average time per sample', before: baseline.kpis.avg_cycle_time, after: current.avg_cycle_time, fmt: fmtDuration, higherIsBetter: false },
+    { label: 'Time until everything finished', before: baseline.kpis.makespan, after: current.makespan, fmt: fmtDuration, higherIsBetter: false },
+    { label: 'Items finished', before: baseline.kpis.completed, after: current.completed, fmt: (v) => String(v), higherIsBetter: true },
   ]
-  for (const s of current.stations) {
-    const old = baseline.kpis.stations.find((x) => x.id === s.id)
-    rows.push({ label: `${s.name} busy`, before: old?.utilisation ?? null, after: s.utilisation, fmt: fmtPct, higherIsBetter: true })
+  for (const r of current.routes) {
+    const old = baseline.kpis.routes.find((x) => x.id === r.id)
+    rows.push({ label: `${r.name}: average time`, before: old?.avg_cycle_time ?? null, after: r.avg_cycle_time, fmt: fmtDuration, higherIsBetter: false })
   }
-  const name = (k: Kpis) => {
-    const b = k.bottleneck
-    if (!b) return 'None'
-    return (b.kind === 'station' ? k.stations : k.arms).find((x) => x.id === b.id)?.name ?? b.id
+  for (const d of current.devices) {
+    if (d.utilisation == null || d.uses === 0) continue
+    const old = baseline.kpis.devices.find((x) => x.id === d.id)
+    rows.push({ label: `${d.name} busy`, before: old?.utilisation ?? null, after: d.utilisation, fmt: fmtPct, higherIsBetter: true })
   }
+  const name = (k: Kpis) => k.bottleneck?.name ?? 'None'
 
   return (
     <div className="compare">

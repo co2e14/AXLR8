@@ -1,52 +1,64 @@
-// Turns the engine's event log into per-sample timelines that can be sampled at any time t.
-import { INPUT, type SimEvent } from './types'
+// Turns the engine's event log into per-item timelines that can be sampled at any time t.
+import type { SimEvent } from './types'
 
-export type Status = 'pending' | 'queued' | 'waiting' | 'moving' | 'processing' | 'done'
+export type Status = 'pending' | 'queued' | 'waiting' | 'moving' | 'processing' | 'dwelling' | 'done'
 
 export interface Segment {
   start: number
   end: number
   status: Status
-  at: string
-  to: string | null
-  arm: string | null
-  reason: 'arm' | 'blocked' | null
+  route: string
+  step: number // where the item is; for moves, the step it left
+  to: number | null // destination step while moving
+  device: string | null
+  unit: number | null
+  cobot: boolean
 }
 
-export interface SampleState extends Omit<Segment, 'start' | 'end'> {
-  sample: number
+export interface ItemState extends Omit<Segment, 'start' | 'end'> {
+  item: number
   progress: number
+  released: number
 }
 
-export type Timelines = Map<number, Segment[]>
+export interface Timeline {
+  route: string
+  segments: Segment[]
+}
 
-function segmentFor(e: SimEvent): Omit<Segment, 'end'> {
-  const base = { start: e.t, at: e.at, to: null, arm: null, reason: null }
-  switch (e.kind) {
-    case 'released':
-    case 'move_end':
-      return { ...base, status: 'queued' }
-    case 'dest_reserved':
-      return { ...base, status: 'waiting', reason: 'arm', to: e.to }
-    case 'move_start':
-      return { ...base, status: 'moving', to: e.to, arm: e.arm }
-    case 'process_start':
-      return { ...base, status: 'processing' }
-    case 'process_end':
-      return { ...base, status: 'waiting', reason: 'blocked' }
-    case 'completed':
-      return { ...base, status: 'done' }
-  }
+export type Timelines = Map<number, Timeline>
+
+const STATUS: Record<SimEvent['kind'], Status> = {
+  released: 'queued',
+  move_ready: 'waiting', // finished here, waiting to be picked up
+  move_start: 'moving',
+  move_end: 'queued', // waiting for a device unit (or a join partner)
+  process_start: 'processing',
+  process_end: 'dwelling', // zero length unless the step has a dwell
+  dwell_end: 'waiting',
+  completed: 'done',
 }
 
 export function buildTimelines(events: SimEvent[]): Timelines {
   const out: Timelines = new Map()
   for (const e of events) {
-    let segs = out.get(e.sample)
-    if (!segs) out.set(e.sample, (segs = []))
+    let tl = out.get(e.item)
+    if (!tl) out.set(e.item, (tl = { route: e.route, segments: [] }))
+    const segs = tl.segments
     const prev = segs[segs.length - 1]
     if (prev) prev.end = e.t
-    segs.push({ ...segmentFor(e), end: Infinity })
+    const moving = e.kind === 'move_start' || e.kind === 'move_ready'
+    segs.push({
+      start: e.t,
+      end: Infinity,
+      status: STATUS[e.kind],
+      route: e.route,
+      step: e.step,
+      to: moving ? e.to : null,
+      device: e.device,
+      unit: e.unit,
+      cobot: e.cobot,
+    })
   }
   return new Map([...out.entries()].sort((a, b) => a[0] - b[0]))
 }
@@ -66,33 +78,42 @@ function lastStartingBy(segs: Segment[], t: number): number {
   return found
 }
 
-export function stateAt(timelines: Timelines, t: number): SampleState[] {
-  const states: SampleState[] = []
-  for (const [sample, segs] of timelines) {
-    const i = lastStartingBy(segs, t)
+export function stateAt(timelines: Timelines, t: number): ItemState[] {
+  const states: ItemState[] = []
+  for (const [item, { route, segments }] of timelines) {
+    const released = segments[0]?.start ?? 0
+    const i = lastStartingBy(segments, t)
     if (i < 0) {
-      states.push({ sample, status: 'pending', at: INPUT, to: null, arm: null, reason: null, progress: 0 })
+      states.push({
+        item, route, released, status: 'pending', step: -1, to: null, device: null, unit: null, cobot: false, progress: 0,
+      })
       continue
     }
-    const { start, end, ...rest } = segs[i]
+    const { start, end, ...rest } = segments[i]
     const progress = end > start && end !== Infinity ? Math.min(1, (t - start) / (end - start)) : 1
-    states.push({ sample, ...rest, progress })
+    states.push({ item, released, ...rest, progress })
   }
   return states
 }
 
-/** Step series [time, samples waiting] for a station's queue. */
-export function queueSeries(events: SimEvent[], stationId: string): [number, number][] {
+/** Step series [time, items waiting] for one device, from arrival at a step to the start of processing. */
+export function queueSeries(events: SimEvent[], deviceId: string): [number, number][] {
+  const arrived = new Map<number, number>()
+  const changes: [number, number][] = []
+  for (const e of events) {
+    if (e.kind === 'move_end') arrived.set(e.item, e.t)
+    else if (e.kind === 'process_start' && e.device === deviceId) {
+      changes.push([arrived.get(e.item) ?? e.t, 1], [e.t, -1])
+    }
+  }
+  changes.sort((a, b) => a[0] - b[0] || a[1] - b[1])
   const series: [number, number][] = []
   let n = 0
-  for (const e of events) {
-    if (e.at !== stationId) continue
-    if (e.kind === 'move_end') n += 1
-    else if (e.kind === 'process_start') n -= 1
-    else continue
+  for (const [t, d] of changes) {
+    n += d
     const last = series[series.length - 1]
-    if (last && last[0] === e.t) last[1] = n
-    else series.push([e.t, n])
+    if (last && last[0] === t) last[1] = n
+    else series.push([t, n])
   }
   return series
 }

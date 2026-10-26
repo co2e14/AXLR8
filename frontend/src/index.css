@@ -16,8 +16,23 @@
   --st-processing: #008c7a;
   --st-moving: #6a4de8;
   --st-waiting: #d1433b;
+  --st-dwelling: #2c7bb6;
   --st-done: #9aa6b0;
   --st-pending: #c3ccd3;
+
+  /* AXL deck colour key */
+  --deck-fixed: #1d6f8c;
+  --deck-project: #ec8a3e;
+  --deck-manual: #5ccf73;
+  --deck-manual-line: #2f9e4a;
+  --deck-optional: #7d878e;
+  --deck-waste: #fff35c;
+  --deck-join: #e0ad00;
+  --deck-join-fill: #fbe7a6;
+  --box-stroke: #0f3442;
+  --grp-crystal: #e66be6;
+  --grp-soak: #2f6cf0;
+  --grp-seed: #f0552b;
 
   --bottleneck: #d1433b;
   --bottleneck-soft: #fbe7e5;
@@ -52,8 +67,22 @@
     --st-processing: #1fa39c;
     --st-moving: #8e78ff;
     --st-waiting: #e8584f;
+    --st-dwelling: #4a9be0;
     --st-done: #5c6a75;
     --st-pending: #36444f;
+
+    --deck-fixed: #236f8a;
+    --deck-project: #e08a45;
+    --deck-manual: #4fbf66;
+    --deck-manual-line: #4fbf66;
+    --deck-optional: #6b757c;
+    --deck-waste: #e6dc4f;
+    --deck-join: #d6a619;
+    --deck-join-fill: #3d3418;
+    --box-stroke: #071c25;
+    --grp-crystal: #c75ac7;
+    --grp-soak: #5a8cff;
+    --grp-seed: #e86a46;
 
     --bottleneck: #e8584f;
     --bottleneck-soft: #3a2224;

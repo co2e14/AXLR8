@@ -1,24 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getExample, listExamples, simulate } from './lib/api'
+import { getExample, simulate } from './lib/api'
 import { buildTimelines, stateAt } from './lib/timeline'
-import { asLabConfig } from './lib/storage'
-import type { LabConfig, RunSettings, SimResult } from './lib/types'
-import { LineSchematic, type Selection } from './components/LineSchematic'
+import { asWorkflow } from './lib/storage'
+import { PHASES, type RunSettings, type Scenario, type SimResult, type Workflow } from './lib/types'
+import { WorkflowMap, stepName, type Selection } from './components/WorkflowMap'
 import { Inspector } from './components/Inspector'
 import { PlaybackBar, usePlayback } from './components/Playback'
-import { Results } from './components/Results'
-import { Samples } from './components/Samples'
+import { Bottlenecks, RoutesTable } from './components/Results'
+import { Items } from './components/Items'
 import { Compare, type Baseline } from './components/Compare'
 import { NumberField } from './components/fields'
 import './App.css'
 
-const LAB_KEY = 'axlr8.lab'
-const RUN_KEY = 'axlr8.run'
+const WF_KEY = 'axlr8.workflow'
+const RUN_KEY = 'axlr8.run.v2'
+const DEFAULT_RUN: RunSettings = { scenario: 'run', phase: 4, cobots: null, single: false, seed: 1 }
 
-function load<T>(key: string): T | null {
+function load(key: string): unknown {
   try {
     const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : null
+    return raw ? JSON.parse(raw) : null
   } catch {
     return null
   }
@@ -32,18 +33,21 @@ function save(key: string, value: unknown) {
   }
 }
 
-type Tab = 'results' | 'samples' | 'compare'
+type Tab = 'bottlenecks' | 'routes' | 'items' | 'compare'
+const TAB_LABEL: Record<Tab, string> = {
+  bottlenecks: 'Bottlenecks',
+  routes: 'Routes',
+  items: 'Items',
+  compare: 'Compare runs',
+}
 
 export default function App() {
-  const [lab, setLab] = useState<LabConfig | null>(() => asLabConfig(load<unknown>(LAB_KEY)))
-  const [run, setRun] = useState<RunSettings>(
-    () => load<RunSettings>(RUN_KEY) ?? { num_samples: 12, arrival_interval: 30, seed: 1 },
-  )
-  const [examples, setExamples] = useState<string[]>([])
+  const [wf, setWf] = useState<Workflow | null>(() => asWorkflow(load(WF_KEY)))
+  const [run, setRun] = useState<RunSettings>(() => ({ ...DEFAULT_RUN, ...((load(RUN_KEY) as RunSettings | null) ?? {}), single: false }))
   const [result, setResult] = useState<SimResult | null>(null)
-  const [resultLab, setResultLab] = useState<string>('')
-  const [selection, setSelection] = useState<Selection>({ kind: 'lab' })
-  const [tab, setTab] = useState<Tab>('results')
+  const [resultKey, setResultKey] = useState('')
+  const [selection, setSelection] = useState<Selection>({ kind: 'overview' })
+  const [tab, setTab] = useState<Tab>('bottlenecks')
   const [baseline, setBaseline] = useState<Baseline | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -53,52 +57,44 @@ export default function App() {
 
   const makespan = result?.kpis.makespan ?? 0
   const pb = usePlayback(makespan)
-
-  useEffect(() => {
-    listExamples().then(setExamples).catch((e: Error) => setError(e.message))
-  }, [])
-
-  useEffect(() => {
-    if (lab === null) {
-      getExample('simple_lab').then(setLab).catch((e: Error) => setError(e.message))
-    }
-  }, [lab])
-
-  useEffect(() => {
-    if (lab) save(LAB_KEY, lab)
-  }, [lab])
-  useEffect(() => save(RUN_KEY, run), [run])
-
-  const timelines = useMemo(() => (result ? buildTimelines(result.events) : null), [result])
-  const states = useMemo(() => (timelines ? stateAt(timelines, pb.t) : null), [timelines, pb.t])
-  const stale = result !== null && lab !== null && JSON.stringify(lab) !== resultLab
   const { setPlaying } = pb
 
-  // A run only describes the lab it was made from; stop replaying it once the lab changes.
+  useEffect(() => {
+    if (wf === null) getExample('axl_workflow').then(setWf).catch((e: Error) => setError(e.message))
+  }, [wf])
+  useEffect(() => {
+    if (wf) save(WF_KEY, wf)
+  }, [wf])
+  useEffect(() => save(RUN_KEY, run), [run])
+
+  const settingsKey = JSON.stringify([wf, run.scenario, run.phase, run.cobots, run.seed])
+  const stale = result !== null && settingsKey !== resultKey
   useEffect(() => {
     if (stale) setPlaying(false)
   }, [stale, setPlaying])
 
-  // On narrow screens the settings panel sits below the line: bring it into view on selection.
   useEffect(() => {
     if (firstSelection.current) {
       firstSelection.current = false
       return
     }
-    if (window.matchMedia('(max-width: 960px)').matches) {
+    if (window.matchMedia('(max-width: 1100px)').matches) {
       sidePanel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }, [selection])
 
+  const timelines = useMemo(() => (result ? buildTimelines(result.events) : null), [result])
+  const states = useMemo(() => (timelines ? stateAt(timelines, pb.t) : null), [timelines, pb.t])
+
   const execute = useCallback(
-    async (settings: RunSettings) => {
-      if (!lab) return
+    async (single: boolean) => {
+      if (!wf) return
       setBusy(true)
       setError(null)
       try {
-        const res = await simulate(lab, settings)
+        const res = await simulate(wf, { ...run, single })
         setResult(res)
-        setResultLab(JSON.stringify(lab))
+        setResultKey(JSON.stringify([wf, run.scenario, run.phase, run.cobots, run.seed]))
         pb.start(res.kpis.makespan)
       } catch (e) {
         setError((e as Error).message)
@@ -106,69 +102,59 @@ export default function App() {
         setBusy(false)
       }
     },
-    [lab, pb],
+    [wf, run, pb],
   )
 
-  const exportLab = () => {
-    if (!lab) return
-    const url = URL.createObjectURL(new Blob([JSON.stringify(lab, null, 2)], { type: 'application/json' }))
+  const exportWf = () => {
+    if (!wf) return
+    const url = URL.createObjectURL(new Blob([JSON.stringify(wf, null, 2)], { type: 'application/json' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = `${lab.name.replace(/[^\w-]+/g, '_') || 'lab'}.json`
+    a.download = `${wf.name.replace(/[^\w-]+/g, '_') || 'workflow'}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  const importLab = async (file: File) => {
+  const importWf = async (file: File) => {
     try {
-      const parsed = asLabConfig(JSON.parse(await file.text()))
-      if (!parsed) throw new Error('it has no stations, or a station is missing its id, name or time')
-      setLab(parsed)
-      setSelection({ kind: 'lab' })
+      const parsed = asWorkflow(JSON.parse(await file.text()))
+      if (!parsed) throw new Error('it is not an AXLR8 workflow (it needs devices and routes)')
+      setWf(parsed)
+      setSelection({ kind: 'overview' })
       setResult(null)
     } catch (e) {
-      setError(`Could not open ${file.name}: ${(e as Error).message}. Choose a lab file exported from AXLR8.`)
+      setError(`Could not open ${file.name}: ${(e as Error).message}.`)
     }
   }
 
-  const keepBaseline = () => {
-    if (!result || !lab) return
-    setBaseline({ label: `${lab.name}, ${result.kpis.num_samples} samples`, kpis: result.kpis })
+  const resetToDeck = () => {
+    getExample('axl_workflow')
+      .then((w) => {
+        setWf(w)
+        setResult(null)
+        setSelection({ kind: 'overview' })
+      })
+      .catch((e: Error) => setError(e.message))
   }
+
+  const keepBaseline = () => {
+    if (!result || !wf) return
+    const phase = PHASES.find((p) => p.value === run.phase)?.label.split(' (')[0] ?? `Phase ${run.phase}`
+    setBaseline({ label: `${run.scenario === 'run' ? 'Run day' : 'Shutdown day'}, ${phase}`, kpis: result.kpis })
+  }
+
+  const defaultCobots = wf?.cobots_by_phase[String(run.phase)] ?? 0
+  const stuck = !stale ? (result?.kpis.stuck ?? []) : []
+  const devices = new Map(wf?.devices.map((d) => [d.id, d]) ?? [])
 
   return (
     <div className="app">
       <header className="topbar">
         <h1 className="wordmark">AXLR8</h1>
-        <span className="lab-name">{lab?.name ?? 'Loading lab…'}</span>
+        <span className="lab-name">{wf?.name ?? 'Loading workflow…'}</span>
         <div className="topbar-actions">
-          {examples.length > 0 && (
-            <select
-              aria-label="Open an example lab"
-              value=""
-              onChange={(e) => {
-                const name = e.target.value
-                if (!name) return
-                getExample(name)
-                  .then((l) => {
-                    setLab(l)
-                    setResult(null)
-                    setSelection({ kind: 'lab' })
-                  })
-                  .catch((err: Error) => setError(err.message))
-              }}
-            >
-              <option value="">Open example…</option>
-              {examples.map((n) => (
-                <option key={n} value={n}>
-                  {n.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
-          )}
-          <button type="button" className="quiet" onClick={() => fileInput.current?.click()}>
-            Open file
-          </button>
+          <button type="button" className="quiet" onClick={resetToDeck}>Reset to deck</button>
+          <button type="button" className="quiet" onClick={() => fileInput.current?.click()}>Open file</button>
           <input
             ref={fileInput}
             type="file"
@@ -176,94 +162,162 @@ export default function App() {
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0]
-              if (f) importLab(f)
+              if (f) importWf(f)
               e.target.value = ''
             }}
           />
-          <button type="button" className="quiet" onClick={exportLab} disabled={!lab}>
-            Save to file
-          </button>
+          <button type="button" className="quiet" onClick={exportWf} disabled={!wf}>Save to file</button>
         </div>
       </header>
 
       {error && (
         <div className="error" role="alert">
           <pre>{error}</pre>
-          <button type="button" className="link" onClick={() => setError(null)}>
-            Dismiss
-          </button>
+          <button type="button" className="link" onClick={() => setError(null)}>Dismiss</button>
         </div>
       )}
 
       <main className="workspace">
-        <section className="line-panel" aria-label="Lab line">
+        <section className="line-panel" aria-label="Workflow">
           <div className="runbar">
-            <button type="button" className="go" disabled={!lab || busy} onClick={() => execute({ ...run, num_samples: 1 })}>
+            <button type="button" className="go" disabled={!wf || busy} onClick={() => execute(true)}>
               GO
-              <span className="go-sub">one sample</span>
+              <span className="go-sub">one of each</span>
             </button>
             <div className="run-settings">
-              <NumberField label="Samples" integer min={1} max={2000} value={run.num_samples} onChange={(num_samples) => setRun({ ...run, num_samples })} />
-              <NumberField label="Release one every" unit="s" min={0} value={run.arrival_interval} onChange={(arrival_interval) => setRun({ ...run, arrival_interval })} />
+              <div className="field">
+                <span className="field-label" id="scenario-label">Day type</span>
+                <div className="segmented" role="radiogroup" aria-labelledby="scenario-label">
+                  {(['run', 'shutdown'] as Scenario[]).map((s) => (
+                    <button key={s} type="button" role="radio" aria-checked={run.scenario === s} onClick={() => setRun({ ...run, scenario: s })}>
+                      {s === 'run' ? 'Run day' : 'Shutdown day'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="field">
+                <span className="field-label">Equipment</span>
+                <select value={run.phase} onChange={(e) => setRun({ ...run, phase: Number(e.target.value) })}>
+                  {PHASES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">Cobots</span>
+                <select
+                  value={run.cobots === null ? '' : String(run.cobots)}
+                  onChange={(e) => setRun({ ...run, cobots: e.target.value === '' ? null : Number(e.target.value) })}
+                >
+                  <option value="">Phase default ({defaultCobots})</option>
+                  {[0, 1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n === 0 ? 'None (manual moves)' : n}</option>)}
+                </select>
+              </label>
               <NumberField label="Random seed" integer min={0} value={run.seed ?? 0} onChange={(seed) => setRun({ ...run, seed })} />
             </div>
-            <button type="button" className="primary" disabled={!lab || busy} onClick={() => execute(run)}>
-              {busy ? 'Running…' : `Run ${run.num_samples} ${run.num_samples === 1 ? 'sample' : 'samples'}`}
+            <button type="button" className="primary" disabled={!wf || busy} onClick={() => execute(false)}>
+              {busy ? 'Running…' : `Run ${run.scenario === 'run' ? 'run-day' : 'shutdown-day'} schedule`}
             </button>
           </div>
 
-          {lab ? (
-            <LineSchematic lab={lab} states={stale ? null : states} kpis={stale ? null : (result?.kpis ?? null)} selection={selection} onSelect={setSelection} />
+          {stuck.length > 0 && wf && (
+            <div className="stuck" role="status">
+              <strong>{stuck.length} {stuck.length === 1 ? 'item never finished' : 'items never finished'}.</strong>{' '}
+              {stuck.slice(0, 3).map((s) => {
+                const r = wf.routes.find((x) => x.id === s.route)
+                const st = r?.steps[s.step]
+                return `${r?.name ?? s.route} item ${s.item} is still at ${st ? stepName(st, devices) : 'the start'}`
+              }).join('; ')}
+              {stuck.length > 3 ? '; …' : '.'} Usually a meeting point has more items on one side than the other: check
+              the item counts and repeats of the routes that meet.
+            </div>
+          )}
+
+          {wf ? (
+            <WorkflowMap
+              wf={wf}
+              phase={run.phase}
+              scenario={run.scenario}
+              states={stale ? null : states}
+              kpis={stale ? null : (result?.kpis ?? null)}
+              selection={selection}
+              onSelect={setSelection}
+            />
           ) : (
-            <p className="hint pad">Loading the example lab…</p>
+            <p className="hint pad">Loading the AXL workflow…</p>
           )}
 
           {result && !stale && <PlaybackBar pb={pb} makespan={makespan} />}
-          {stale && <p className="stale">You have changed the lab since the last run. Run again to see the effect; the results below are from the previous version.</p>}
-          <StatusLegend />
+          {stale && <p className="stale">Settings have changed since the last run. Run again to see the effect; the tables below are from the previous run.</p>}
+          <MapLegend />
 
           <div className="tabs" role="tablist" aria-label="Run details">
-            {(['results', 'samples', 'compare'] as Tab[]).map((t) => (
+            {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
               <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
-                {t === 'results' ? 'Bottlenecks' : t === 'samples' ? 'Samples' : 'Compare runs'}
+                {TAB_LABEL[t]}
               </button>
             ))}
           </div>
           <div className="tab-body" role="tabpanel">
             {!result && tab !== 'compare' && (
-              <p className="hint">Press GO to send one sample through, or run a batch of samples to find the bottleneck.</p>
+              <p className="hint">
+                Press GO to send one item down every route, or run the full day schedule to find the bottleneck.
+              </p>
             )}
-            {result && lab && tab === 'results' && <Results lab={lab} kpis={result.kpis} events={result.events} t={pb.t} />}
-            {result && lab && states && timelines && tab === 'samples' && (
-              <Samples lab={lab} states={states} timelines={timelines} t={pb.t} />
+            {result && wf && tab === 'bottlenecks' && (
+              <Bottlenecks wf={wf} kpis={result.kpis} events={result.events} t={pb.t} onSelect={setSelection} />
             )}
+            {result && wf && tab === 'routes' && (
+              <RoutesTable wf={wf} kpis={result.kpis} events={result.events} t={pb.t} onSelect={setSelection} />
+            )}
+            {result && wf && states && tab === 'items' && <Items wf={wf} states={states} t={pb.t} />}
             {tab === 'compare' && <Compare baseline={baseline} current={result?.kpis ?? null} onKeep={keepBaseline} />}
           </div>
         </section>
 
         <aside className="side-panel" ref={sidePanel}>
-          {lab && <Inspector lab={lab} kpis={stale ? null : (result?.kpis ?? null)} selection={selection} onChange={setLab} onSelect={setSelection} />}
+          {wf && (
+            <Inspector
+              wf={wf}
+              phase={run.phase}
+              kpis={stale ? null : (result?.kpis ?? null)}
+              selection={selection}
+              onChange={setWf}
+              onSelect={setSelection}
+            />
+          )}
         </aside>
       </main>
     </div>
   )
 }
 
-function StatusLegend() {
+function MapLegend() {
+  const boxes: [string, string][] = [
+    ['fixed', 'Fixed timing'],
+    ['project', 'Project-specific timing'],
+    ['manual', 'Manual access point'],
+    ['optional', 'Optional step'],
+    ['join', 'Meeting point (convergence)'],
+  ]
   const items: [string, string][] = [
     ['queued', 'Queued'],
     ['processing', 'Processing'],
     ['moving', 'Moving'],
-    ['waiting', 'Held or waiting for arm'],
+    ['waiting', 'Waiting for a cobot'],
+    ['dwelling', 'Incubating'],
   ]
   return (
-    <ul className="legend status-legend" aria-label="Sample colours">
-      {items.map(([k, v]) => (
-        <li key={k}>
-          <span className={`dot st-bg-${k}`} aria-hidden="true" />
-          {v}
-        </li>
-      ))}
-    </ul>
+    <div className="map-legend">
+      <ul className="legend" aria-label="Box colours">
+        {boxes.map(([k, v]) => (
+          <li key={k}><span className={`box-swatch ${k}`} aria-hidden="true" />{v}</li>
+        ))}
+        <li><span className="hint">? = assumed time, not in the deck</span></li>
+      </ul>
+      <ul className="legend" aria-label="Item colours">
+        {items.map(([k, v]) => (
+          <li key={k}><span className={`dot st-bg-${k}`} aria-hidden="true" />{v}</li>
+        ))}
+      </ul>
+    </div>
   )
 }
