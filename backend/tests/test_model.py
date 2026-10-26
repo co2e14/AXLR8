@@ -48,3 +48,14 @@ def test_num_samples_is_bounded(n):
 def test_negative_times_rejected():
     with pytest.raises(ValidationError):
         station("a", -1)
+
+
+def test_unknown_station_in_transfer_is_named():
+    with pytest.raises(ValidationError, match="unknown location 'zz'"):
+        lab([station("a", 1)], [transfer("a", "zz", 1)])
+
+
+@pytest.mark.parametrize("bad", [float("inf"), float("nan")])
+def test_non_finite_times_rejected(bad):
+    with pytest.raises(ValidationError):
+        station("a", bad)

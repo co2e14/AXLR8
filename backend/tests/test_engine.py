@@ -1,3 +1,5 @@
+import pytest
+
 from axlr8.engine import simulate
 from axlr8.model import INPUT, OUTPUT, RunSettings, TimeSpec
 from conftest import lab, station, transfer
@@ -86,3 +88,15 @@ def test_event_times_never_decrease():
     )
     times = [e.t for e in run(cfg, n=25, interval=1)]
     assert times == sorted(times)
+
+
+def test_changing_one_station_does_not_reshuffle_randomness_elsewhere():
+    noisy = TimeSpec(value=10, kind="normal", spread=3)
+    a = station("a", 0).model_copy(update={"process_time": noisy})
+    b = station("b", 0).model_copy(update={"process_time": noisy})
+    before = run(lab([a, b]), n=10, seed=5)
+    after = run(lab([a.model_copy(update={"process_time": TimeSpec(value=4)}), b]), n=10, seed=5)
+    durations = lambda evs: [e.t for e in evs if e.kind == "process_end" and e.at == "b"]
+    starts = lambda evs: [e.t for e in evs if e.kind == "process_start" and e.at == "b"]
+    gaps = lambda evs: [x - y for x, y in zip(durations(evs), starts(evs))]
+    assert gaps(after) == pytest.approx(gaps(before))

@@ -73,7 +73,7 @@ class _StationSim:
         self.slots.release(slot)
 
 
-def _sample(env, k, lab, stations, arms, rng, log):
+def _sample(env, k, lab, stations, arms, rng_for, log):
     log(Event(t=env.now, sample=k, kind="released", at=INPUT))
     locs = lab.locations()
     leave_here = None
@@ -92,7 +92,7 @@ def _sample(env, k, lab, stations, arms, rng, log):
         log(Event(t=env.now, sample=k, kind="move_start", at=here, to=there, arm=transfer.arm))
         if leave_here is not None:
             leave_here.succeed()
-        yield env.timeout(sample_time(transfer.time, rng))
+        yield env.timeout(sample_time(transfer.time, rng_for(f"transfer:{here}>{there}")))
         if arm_req is not None:
             arms[transfer.arm].release(arm_req)
         log(Event(t=env.now, sample=k, kind="move_end", at=there, arm=transfer.arm))
@@ -111,12 +111,21 @@ def _arrivals(env, run: RunSettings, start_sample):
 
 def simulate(lab: LabConfig, run: RunSettings) -> list[Event]:
     env = simpy.Environment()
-    rng = random.Random(run.seed)
+    # One random stream per station/transfer, so editing one part of the lab leaves the
+    # random draws everywhere else unchanged (keeps scenario comparisons fair).
+    root = run.seed if run.seed is not None else random.SystemRandom().randrange(2**63)
+    streams: dict[str, random.Random] = {}
+
+    def rng_for(key: str) -> random.Random:
+        if key not in streams:
+            streams[key] = random.Random(f"{root}:{key}")
+        return streams[key]
+
     events: list[Event] = []
     log = events.append
-    stations = {s.id: _StationSim(env, s, run.num_samples, rng, log) for s in lab.stations}
+    stations = {s.id: _StationSim(env, s, run.num_samples, rng_for(f"station:{s.id}"), log) for s in lab.stations}
     arms = {a.id: simpy.Resource(env, capacity=1) for a in lab.arms}
-    env.process(_arrivals(env, run, lambda k: env.process(_sample(env, k, lab, stations, arms, rng, log))))
+    env.process(_arrivals(env, run, lambda k: env.process(_sample(env, k, lab, stations, arms, rng_for, log))))
     env.run()
     done = sum(1 for e in events if e.kind == "completed")
     if done != run.num_samples:

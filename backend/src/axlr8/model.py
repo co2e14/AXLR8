@@ -5,14 +5,17 @@ All times are in seconds.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 INPUT = "input"
 OUTPUT = "output"
 
 
 class TimeSpec(BaseModel):
-    """A duration: `value` is the nominal time, `spread` how far it can vary."""
+    """A duration. `value` is the nominal time. `spread` is the standard deviation for
+    `normal`, and the half-width of the range for `uniform` and `triangular`."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
 
     value: float = Field(ge=0)
     kind: Literal["fixed", "normal", "uniform", "triangular"] = "fixed"
@@ -78,6 +81,9 @@ class LabConfig(BaseModel):
         legal = set(zip(locs, locs[1:]))
         seen = set()
         for t in self.transfers:
+            for loc in (t.from_id, t.to_id):
+                if loc not in locs:
+                    raise ValueError(f"transfer {t.from_id} -> {t.to_id} names unknown location '{loc}'")
             pair = (t.from_id, t.to_id)
             if pair not in legal:
                 raise ValueError(
@@ -92,6 +98,8 @@ class LabConfig(BaseModel):
 
 
 class RunSettings(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     num_samples: int = Field(default=1, ge=1, le=2000)
     arrival_interval: float = Field(default=0, ge=0, description="Seconds between releases; 0 = all at once")
     seed: int | None = None

@@ -27,7 +27,7 @@ def test_invalid_transfer_is_422_with_message():
     bad = {**EXAMPLE, "transfers": [{"from_id": "input", "to_id": "nowhere", "time": {"value": 1}}]}
     r = client.post("/api/simulate", json={"lab": bad})
     assert r.status_code == 422
-    assert "consecutive" in r.text
+    assert "unknown location" in r.text
 
 
 def test_too_many_samples_is_422():
@@ -44,3 +44,16 @@ def test_examples_listing_and_fetch():
 @pytest.mark.parametrize("name", ["missing", "..%2Fbackend%2Fpyproject", "a.b"])
 def test_unknown_or_unsafe_example_is_404(name):
     assert client.get(f"/api/examples/{name}").status_code == 404
+
+
+def test_nan_in_request_is_422_not_500():
+    body = '{"lab": {"stations": [{"id": "a", "name": "A", "process_time": {"value": NaN}}]}}'
+    r = client.post("/api/simulate", content=body, headers={"Content-Type": "application/json"})
+    assert r.status_code == 422
+
+
+def test_oversized_run_is_rejected():
+    stations = [{"id": f"s{i}", "name": "S", "process_time": {"value": 1}} for i in range(30)]
+    r = client.post("/api/simulate", json={"lab": {"stations": stations}, "run": {"num_samples": 2000}})
+    assert r.status_code == 422
+    assert "too large" in r.text
