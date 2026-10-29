@@ -922,3 +922,28 @@ button.link.plain:hover {
 .notice p {
   margin: 2px 0;
 }
+
+.view-switch {
+  margin: 12px 0 8px;
+}
+
+.figure-range {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-2, var(--ink));
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+.range {
+  color: var(--ink-2, var(--ink));
+  opacity: 0.75;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.range-note {
+  margin: 4px 0 10px;
+  font-size: 13px;
+}

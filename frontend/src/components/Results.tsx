@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { fmtDuration, fmtPct } from '../lib/format'
 import { queueSeries } from '../lib/timeline'
-import type { Kpis, SimEvent, Workflow } from '../lib/types'
+import type { Kpis, Ranges, SimEvent, Spread, Workflow } from '../lib/types'
 import type { Selection } from './WorkflowMap'
 
 interface Props {
@@ -10,9 +10,20 @@ interface Props {
   events: SimEvent[]
   t: number
   onSelect: (s: Selection) => void
+  ranges?: Ranges | null // when the run was repeated over several seeds
 }
 
-export function Bottlenecks({ kpis, events, t, onSelect }: Props) {
+/** "low–high", the middle 80% of the runs; null when every run gave the same value. */
+function span(s: Spread | null | undefined, fmt: (v: number) => string): string | null {
+  if (!s || s.max - s.min < 1e-9) return null
+  const lo = fmt(s.low)
+  const hi = fmt(s.high)
+  if (lo !== hi) return `${lo}–${hi}`
+  const [a, b] = [fmt(s.min), fmt(s.max)]
+  return a === b ? null : `${a}–${b}`
+}
+
+export function Bottlenecks({ kpis, events, t, onSelect, ranges }: Props) {
   const rows = kpis.devices
     .filter((d) => d.utilisation !== null && d.uses > 0)
     .sort((a, b) => (b.utilisation ?? 0) - (a.utilisation ?? 0))
@@ -23,11 +34,15 @@ export function Bottlenecks({ kpis, events, t, onSelect }: Props) {
   return (
     <div className="results">
       <div className="headline">
-        <Figure value={fmtDuration(kpis.makespan)} label="until the last item finished" />
-        <Figure value={`${kpis.completed} of ${kpis.released}`} label="items finished" />
+        <Figure value={fmtDuration(kpis.makespan)} label="until the last item finished" range={span(ranges?.makespan, fmtDuration)} />
+        <Figure value={`${kpis.completed} of ${kpis.released}`} label="items finished" range={span(ranges?.completed, (v) => v.toFixed(0))} />
+        {kpis.carried_over > 0 && (
+          <Figure value={`${kpis.carried_completed} of ${kpis.carried_over}`} label="carried over from day 1, finished" />
+        )}
         <Figure
           value={kpis.cobots.utilisation == null ? 'manual' : fmtPct(kpis.cobots.utilisation)}
           label={kpis.cobots.count ? `busy, ${kpis.cobots.count} ${kpis.cobots.count === 1 ? 'cobot' : 'cobots'}` : 'moves (no cobots)'}
+          range={span(ranges?.cobot_utilisation, fmtPct)}
         />
         <p className="verdict">
           {b ? (
@@ -41,6 +56,8 @@ export function Bottlenecks({ kpis, events, t, onSelect }: Props) {
         </p>
       </div>
 
+      {ranges && <RangeNote ranges={ranges} kpis={kpis} />}
+
       <table className="util-table">
         <caption className="sr-only">How busy each device was</caption>
         <thead>
@@ -48,6 +65,7 @@ export function Bottlenecks({ kpis, events, t, onSelect }: Props) {
             <th scope="col">Device</th>
             <th scope="col" className="num">Units</th>
             <th scope="col" className="bar-col">Time spent</th>
+            {ranges && <th scope="col" className="num">Range</th>}
             <th scope="col" className="num">Uses</th>
             <th scope="col" className="num">Avg wait</th>
             <th scope="col" className="num">Longest queue</th>
@@ -69,6 +87,7 @@ export function Bottlenecks({ kpis, events, t, onSelect }: Props) {
                   { cls: 'waiting', value: d.blocked_fraction, label: 'holding finished items for a cobot' },
                 ]} />
               </td>
+              {ranges && <td className="num range">{span(ranges.devices[d.id], fmtPct) ?? '—'}</td>}
               <td className="num">{d.uses}</td>
               <td className="num">{fmtDuration(d.avg_wait)}</td>
               <td className="num">{d.max_queue}</td>
@@ -96,11 +115,125 @@ export function Bottlenecks({ kpis, events, t, onSelect }: Props) {
         <li><span className="swatch moving" />Cobots moving items</li>
         <li><span className="swatch idle" />Idle</li>
       </ul>
+      {kpis.incubators.length > 0 && <Incubators kpis={kpis} />}
     </div>
   )
 }
 
-export function RoutesTable({ wf, kpis, onSelect }: Props) {
+function Incubators({ kpis }: { kpis: Kpis }) {
+  return (
+    <table className="util-table">
+      <caption>
+        Incubators. Imaging covers until 24 h after the last day starts, including stored plates imaged again after the
+        last item finished; the busy figures above stop at the last item.
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Unit</th>
+          <th scope="col" className="num">Plates inside (start → end)</th>
+          <th scope="col" className="num">In / out</th>
+          <th scope="col" className="bar-col">Time imaging</th>
+          <th scope="col" className="num">Plates imaged</th>
+          <th scope="col" className="num">Growth images</th>
+          <th scope="col" className="num">Avg late</th>
+          <th scope="col" className="num">Most late</th>
+        </tr>
+      </thead>
+      <tbody>
+        {kpis.incubators.map((u) => (
+          <tr key={`${u.id}:${u.unit}`} className={u.imaging_share > 0.9 ? 'is-bottleneck' : undefined}>
+            <th scope="row">{u.name} {u.unit}{u.imager ? '' : ' (no imager)'}</th>
+            <td className="num">
+              {u.stored_start} → {u.stored_end}{u.capacity != null ? ` of ${u.capacity}` : ''}
+            </td>
+            <td className="num">+{u.stored_today} / −{u.taken_out}</td>
+            <td className="bar-col">
+              {u.imager ? (
+                <UtilBar parts={[{ cls: 'processing', value: Math.min(1, u.imaging_share), label: 'imaging' }]} />
+              ) : (
+                <span className="hint">—</span>
+              )}
+            </td>
+            <td className="num">{u.images}</td>
+            <td className="num">{u.scheduled}</td>
+            <td className="num">{u.scheduled ? fmtDuration(u.avg_delay) : '—'}</td>
+            <td className="num">{u.scheduled ? fmtDuration(u.max_delay) : '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+function RangeNote({ ranges, kpis }: { ranges: Ranges; kpis: Kpis }) {
+  const names = new Map([...kpis.devices.map((d) => [d.id, d.name] as const), ['cobots', 'Cobots'] as const])
+  const busiest = Object.entries(ranges.bottleneck).sort((a, b) => b[1] - a[1])
+  const same = ranges.makespan.max - ranges.makespan.min < 1e-9 && Object.values(ranges.devices).every((s) => s.max - s.min < 1e-9)
+  const growth = span(ranges.growth_delay, fmtDuration)
+  return (
+    <p className="range-note" role="status">
+      {same ? (
+        <>
+          All {ranges.runs} runs gave the same results: every time is fixed. Set a time variation, or give device and step
+          times a spread, to see how much the results could vary.
+        </>
+      ) : (
+        <>
+          Figures are for seed {ranges.seeds[0]}; ranges cover the middle 80% of {ranges.runs} runs (seeds {ranges.seeds[0]}–
+          {ranges.seeds[ranges.seeds.length - 1]}). Busiest:{' '}
+          {busiest.map(([id, n]) => `${names.get(id) ?? id} in ${n} of ${ranges.runs}`).join(', ')}.
+          {growth && <> Growth images are {growth} late on average.</>}
+        </>
+      )}
+    </p>
+  )
+}
+
+export function DaysTable({ kpis }: { kpis: Kpis }) {
+  return (
+    <table className="routes-table">
+      <caption className="sr-only">Each day of the run</caption>
+      <thead>
+        <tr>
+          <th scope="col">Day</th>
+          <th scope="col" className="num">Items finished</th>
+          <th scope="col" className="num">Day's work done after</th>
+          <th scope="col" className="num">Plates in incubators</th>
+          <th scope="col" className="num">Soaks: grown / from stock</th>
+          <th scope="col" className="num">Plates imaged</th>
+          <th scope="col" className="num">Imaging</th>
+          <th scope="col" className="num">Growth images late</th>
+          <th scope="col" className="num">Cobot moves</th>
+        </tr>
+      </thead>
+      <tbody>
+        {kpis.days.map((d) => (
+          <tr key={d.day}>
+            <th scope="row">Day {d.day}</th>
+            <td className={`num${d.completed < d.released ? ' worse' : ''}`}>{d.completed} of {d.released}</td>
+            <td className="num">{d.last_finish == null ? '—' : fmtDuration(d.last_finish)}</td>
+            <td className="num">{d.stored_end}</td>
+            <td className="num">{d.soaks_grown} / {d.soaks_stock}</td>
+            <td className="num">{d.images}</td>
+            <td className="num">{d.imaging_hours.toFixed(1)} h</td>
+            <td className="num">{d.growth_delay ? fmtDuration(d.growth_delay) : '—'}</td>
+            <td className="num">{d.cobot_moves}</td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colSpan={9} className="hint">
+            Soaks take the plate that has been growing ready longest; until plates set up in the run have grown, they use
+            plates that were inside at the start. The last day runs on until its last item finishes.
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  )
+}
+
+export function RoutesTable({ wf, kpis, onSelect, ranges }: Props) {
   return (
     <table className="routes-table">
       <thead>
@@ -125,7 +258,10 @@ export function RoutesTable({ wf, kpis, onSelect }: Props) {
                 </button>
               </th>
               <td className="num">{r.completed} of {r.released}</td>
-              <td className="num">{r.avg_cycle_time == null ? '—' : fmtDuration(r.avg_cycle_time)}</td>
+              <td className="num">
+                {r.avg_cycle_time == null ? '—' : fmtDuration(r.avg_cycle_time)}
+                {span(ranges?.routes[r.id]?.avg_cycle, fmtDuration) && <span className="range"> ({span(ranges?.routes[r.id]?.avg_cycle, fmtDuration)})</span>}
+              </td>
               <td className="num">{r.min_cycle_time == null ? '—' : fmtDuration(r.min_cycle_time)}</td>
               <td className="num">{r.max_cycle_time == null ? '—' : fmtDuration(r.max_cycle_time)}</td>
               <td className="num">{r.throughput_per_hour == null ? '—' : r.throughput_per_hour.toFixed(1)}</td>
@@ -137,6 +273,9 @@ export function RoutesTable({ wf, kpis, onSelect }: Props) {
                   : r.keeps_up
                     ? `Yes, every ${fmtDuration(route?.interval ?? 0)}`
                     : 'No, waits grow over the day'}
+                {ranges && ranges.routes[r.id] && r.keeps_up !== null && (
+                  <span className="range"> (kept up in {ranges.routes[r.id].keeps_up} of {ranges.runs} runs)</span>
+                )}
               </td>
             </tr>
           )
@@ -146,11 +285,12 @@ export function RoutesTable({ wf, kpis, onSelect }: Props) {
   )
 }
 
-function Figure({ value, label }: { value: string; label: string }) {
+function Figure({ value, label, range }: { value: string; label: string; range?: string | null }) {
   return (
     <div className="figure">
       <span className="figure-value">{value}</span>
       <span className="figure-label">{label}</span>
+      {range && <span className="figure-range">{range} across runs</span>}
     </div>
   )
 }

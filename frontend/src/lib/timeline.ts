@@ -37,6 +37,8 @@ const STATUS: Record<SimEvent['kind'], Status> = {
   process_end: 'dwelling', // zero length unless the step has a dwell
   dwell_end: 'waiting',
   completed: 'done',
+  image_start: 'processing', // a stored plate being imaged again
+  image_end: 'done',
 }
 
 export function buildTimelines(events: SimEvent[]): Timelines {
@@ -96,14 +98,15 @@ export function stateAt(timelines: Timelines, t: number): ItemState[] {
   return states
 }
 
-/** Step series [time, items waiting] for one device, from arrival at a step to the start of processing. */
+/** Step series [time, items waiting] for one device, from arrival at a step to the start of processing.
+ * Starts at time 0: on a follow-on day, items carried over from day 1 count from then. */
 export function queueSeries(events: SimEvent[], deviceId: string): [number, number][] {
   const arrived = new Map<number, number>()
   const changes: [number, number][] = []
   for (const e of events) {
     if (e.kind === 'move_end') arrived.set(e.item, e.t)
     else if (e.kind === 'process_start' && e.device === deviceId) {
-      changes.push([arrived.get(e.item) ?? e.t, 1], [e.t, -1])
+      changes.push([Math.max(0, arrived.get(e.item) ?? e.t), 1], [Math.max(0, e.t), -1])
     }
   }
   changes.sort((a, b) => a[0] - b[0] || a[1] - b[1])

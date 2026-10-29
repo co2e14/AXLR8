@@ -1,20 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getExample, simulate } from './lib/api'
 import { buildTimelines, stateAt } from './lib/timeline'
-import { asWorkflow } from './lib/storage'
-import { PHASES, type RunSettings, type Scenario, type SimResult, type Workflow } from './lib/types'
+import { asWorkflow, WF_KEY } from './lib/storage'
+import { DAY_LABEL, PHASES, routeScenario, type DayType, type RunSettings, type SimResult, type Workflow } from './lib/types'
 import { WorkflowMap, stepName, type Selection } from './components/WorkflowMap'
 import { Inspector } from './components/Inspector'
 import { PlaybackBar, usePlayback } from './components/Playback'
-import { Bottlenecks, RoutesTable } from './components/Results'
+import { Bottlenecks, DaysTable, RoutesTable } from './components/Results'
 import { Items } from './components/Items'
 import { Compare, type Baseline } from './components/Compare'
 import { NumberField } from './components/fields'
+import { LabView } from './components/LabView'
+import { DataView } from './components/DataView'
+import { resolveLayout, toLayout } from './lib/lab'
 import './App.css'
 
-const WF_KEY = 'axlr8.workflow.v3' // bump when the deck example changes shape
 const RUN_KEY = 'axlr8.run.v2'
-const DEFAULT_RUN: RunSettings = { scenario: 'run', phase: 4, cobots: null, single: false, seed: 1 }
+const DEFAULT_RUN: RunSettings = {
+  scenario: 'run', day_length: 24 * 3600, days: 1, time_variation: 0, runs: 1, phase: 4, cobots: null, single: false, seed: 1,
+}
 
 function load(key: string): unknown {
   try {
@@ -33,9 +37,21 @@ function save(key: string, value: unknown) {
   }
 }
 
-type Tab = 'bottlenecks' | 'routes' | 'items' | 'compare'
+type View = 'map' | 'lab' | 'data'
+const VIEW_LABEL: Record<View, string> = { map: 'Workflow map', lab: '3D lab', data: 'Lab data' }
+
+/** Days actually simulated: a follow-on day is always two. */
+const daysOf = (run: RunSettings) => (run.scenario === 'follow_on' ? 2 : run.days)
+
+const runKey = (wf: Workflow | null, run: RunSettings) =>
+  JSON.stringify([
+    wf, run.scenario, daysOf(run) > 1 ? run.day_length : null, daysOf(run), run.time_variation, run.runs, run.phase, run.cobots, run.seed,
+  ])
+
+type Tab = 'bottlenecks' | 'days' | 'routes' | 'items' | 'compare'
 const TAB_LABEL: Record<Tab, string> = {
   bottlenecks: 'Bottlenecks',
+  days: 'Days',
   routes: 'Routes',
   items: 'Items',
   compare: 'Compare runs',
@@ -48,6 +64,7 @@ export default function App() {
   const [resultKey, setResultKey] = useState('')
   const [selection, setSelection] = useState<Selection>({ kind: 'overview' })
   const [tab, setTab] = useState<Tab>('bottlenecks')
+  const [view, setView] = useState<View>('map')
   const [baseline, setBaseline] = useState<Baseline | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -67,7 +84,7 @@ export default function App() {
   }, [wf])
   useEffect(() => save(RUN_KEY, run), [run])
 
-  const settingsKey = JSON.stringify([wf, run.scenario, run.phase, run.cobots, run.seed])
+  const settingsKey = runKey(wf, run)
   const stale = result !== null && settingsKey !== resultKey
   useEffect(() => {
     if (stale) setPlaying(false)
@@ -83,7 +100,12 @@ export default function App() {
     }
   }, [selection])
 
-  const timelines = useMemo(() => (result ? buildTimelines(result.events) : null), [result])
+  // Items from the day before a follow-on day that finished before it are left out of the map and item list.
+  const timelines = useMemo(() => {
+    if (!result) return null
+    const doneBefore = new Set(result.events.filter((e) => e.kind === 'completed' && e.t < 0 && !e.device).map((e) => e.item))
+    return buildTimelines(doneBefore.size ? result.events.filter((e) => !doneBefore.has(e.item)) : result.events)
+  }, [result])
   const states = useMemo(() => (timelines ? stateAt(timelines, pb.t) : null), [timelines, pb.t])
 
   const execute = useCallback(
@@ -92,10 +114,11 @@ export default function App() {
       setBusy(true)
       setError(null)
       try {
-        const res = await simulate(wf, { ...run, single })
+        // The engine drives the arms along the rail, so it needs every station placed.
+        const res = await simulate({ ...wf, layout: toLayout(resolveLayout(wf)) }, { ...run, single })
         setResult(res)
-        setResultKey(JSON.stringify([wf, run.scenario, run.phase, run.cobots, run.seed]))
-        pb.start(res.kpis.makespan)
+        setResultKey(runKey(wf, run))
+        pb.start()
       } catch (e) {
         setError((e as Error).message)
       } finally {
@@ -140,7 +163,7 @@ export default function App() {
   const keepBaseline = () => {
     if (!result || !wf) return
     const phase = PHASES.find((p) => p.value === run.phase)?.label.split(' (')[0] ?? `Phase ${run.phase}`
-    setBaseline({ label: `${run.scenario === 'run' ? 'Run day' : 'Shutdown day'}, ${phase}`, kpis: result.kpis })
+    setBaseline({ label: `${DAY_LABEL[run.scenario]}, ${phase}`, kpis: result.kpis })
   }
 
   const defaultCobots = wf?.cobots_by_phase[String(run.phase)] ?? 0
@@ -188,13 +211,27 @@ export default function App() {
               <div className="field">
                 <span className="field-label" id="scenario-label">Day type</span>
                 <div className="segmented" role="radiogroup" aria-labelledby="scenario-label">
-                  {(['run', 'shutdown'] as Scenario[]).map((s) => (
+                  {(['run', 'follow_on', 'shutdown'] as DayType[]).map((s) => (
                     <button key={s} type="button" role="radio" aria-checked={run.scenario === s} onClick={() => setRun({ ...run, scenario: s })}>
-                      {s === 'run' ? 'Run day' : 'Shutdown day'}
+                      {DAY_LABEL[s]}
                     </button>
                   ))}
                 </div>
               </div>
+              {run.scenario !== 'follow_on' && (
+                <NumberField label="Days" integer min={1} max={30} value={run.days} onChange={(days) => setRun({ ...run, days })} />
+              )}
+              {daysOf(run) > 1 && (
+                <NumberField
+                  label={run.scenario === 'follow_on' ? 'Day 2 starts after' : 'Each day starts after'}
+                  unit="h"
+                  min={0.5}
+                  max={168}
+                  step={0.5}
+                  value={run.day_length / 3600}
+                  onChange={(h) => setRun({ ...run, day_length: h * 3600 })}
+                />
+              )}
               <label className="field">
                 <span className="field-label">Equipment</span>
                 <select value={run.phase} onChange={(e) => setRun({ ...run, phase: Number(e.target.value) })}>
@@ -212,9 +249,25 @@ export default function App() {
                 </select>
               </label>
               <NumberField label="Random seed" integer min={0} value={run.seed ?? 0} onChange={(seed) => setRun({ ...run, seed })} />
+              <NumberField
+                label="Runs (seeds)"
+                integer
+                min={1}
+                max={50}
+                value={run.runs}
+                onChange={(runs) => setRun({ ...run, runs, time_variation: runs > 1 && run.runs === 1 && run.time_variation === 0 ? 0.1 : run.time_variation })}
+              />
+              <NumberField
+                label="Time variation"
+                unit="± %"
+                min={0}
+                max={50}
+                value={Math.round(run.time_variation * 100)}
+                onChange={(p) => setRun({ ...run, time_variation: p / 100 })}
+              />
             </div>
             <button type="button" className="primary" disabled={!wf || busy} onClick={() => execute(false)}>
-              {busy ? 'Running…' : `Run ${run.scenario === 'run' ? 'run-day' : 'shutdown-day'} schedule`}
+              {busy ? 'Running…' : `Run ${DAY_LABEL[run.scenario].toLowerCase().replace(' ', '-')} schedule`}
             </button>
           </div>
 
@@ -248,11 +301,34 @@ export default function App() {
             </div>
           )}
 
-          {wf ? (
+          <div className="segmented view-switch" role="radiogroup" aria-label="View">
+            {(['map', 'lab', 'data'] as View[]).map((v) => (
+              <button key={v} type="button" role="radio" aria-checked={view === v} onClick={() => setView(v)}>
+                {VIEW_LABEL[v]}
+              </button>
+            ))}
+          </div>
+
+          {wf && view === 'data' ? (
+            <DataView wf={{ ...wf, layout: toLayout(resolveLayout(wf)) }} run={run} />
+          ) : wf && view === 'lab' ? (
+            <LabView
+              wf={wf}
+              phase={run.phase}
+              run={run}
+              result={stale ? null : result}
+              t={pb.t}
+              onSeek={(t) => {
+                pb.setPlaying(false)
+                pb.setT(t)
+              }}
+              onChange={setWf}
+            />
+          ) : wf ? (
             <WorkflowMap
               wf={wf}
               phase={run.phase}
-              scenario={run.scenario}
+              scenario={routeScenario(run.scenario)}
               states={stale ? null : states}
               kpis={stale ? null : (result?.kpis ?? null)}
               selection={selection}
@@ -264,10 +340,10 @@ export default function App() {
 
           {result && !stale && <PlaybackBar pb={pb} makespan={makespan} />}
           {stale && <p className="stale">Settings have changed since the last run. Run again to see the effect; the tables below are from the previous run.</p>}
-          <MapLegend />
+          {view === 'map' && <MapLegend />}
 
           <div className="tabs" role="tablist" aria-label="Run details">
-            {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
+            {(Object.keys(TAB_LABEL) as Tab[]).filter((t) => t !== 'days' || (result?.kpis.days.length ?? 0) > 0).map((t) => (
               <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
                 {TAB_LABEL[t]}
               </button>
@@ -280,10 +356,11 @@ export default function App() {
               </p>
             )}
             {result && wf && tab === 'bottlenecks' && (
-              <Bottlenecks wf={wf} kpis={result.kpis} events={result.events} t={pb.t} onSelect={setSelection} />
+              <Bottlenecks wf={wf} kpis={result.kpis} events={result.events} t={pb.t} onSelect={setSelection} ranges={result.ranges ?? null} />
             )}
+            {result && wf && tab === 'days' && <DaysTable kpis={result.kpis} />}
             {result && wf && tab === 'routes' && (
-              <RoutesTable wf={wf} kpis={result.kpis} events={result.events} t={pb.t} onSelect={setSelection} />
+              <RoutesTable wf={wf} kpis={result.kpis} events={result.events} t={pb.t} onSelect={setSelection} ranges={result.ranges ?? null} />
             )}
             {result && wf && states && tab === 'items' && <Items wf={wf} states={states} t={pb.t} />}
             {tab === 'compare' && <Compare baseline={baseline} current={result?.kpis ?? null} onKeep={keepBaseline} />}
