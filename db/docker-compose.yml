@@ -1,0 +1,15 @@
+# A throwaway Postgres with the AXL metadata schema and mock data.
+#   cd backend && uv run python scripts/mock_db.py     # writes db/seed.sql
+#   cd db && docker compose up                         # then: psql postgresql://axl:axl@localhost:5433/axlr8
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: axlr8
+      POSTGRES_USER: axl
+      POSTGRES_PASSWORD: axl # mock data only; change for anything real
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/1-schema.sql:ro
+      - ./seed.sql:/docker-entrypoint-initdb.d/2-seed.sql:ro
