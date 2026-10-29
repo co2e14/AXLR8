@@ -22,7 +22,7 @@ The first version modelled one linear line. The AXL workflow needs:
 | Grey boxes "optional: for leftover reagents", `*` steps | **Optional** steps that can be switched on/off |
 | Green MAP boxes: manual access points | Manual transport (no cobot) |
 | Linked devices (BenchCel + labeller; SpectroQ imaging → incubation → imaging) | Linked transport (no cobot, no move time) |
-| Soaking (blue) during runs, seed stock (red) during shutdowns, crystallisation (pink) always | **Scenarios**: *Run day* / *Shutdown day* |
+| Soaking (blue) during runs, seed stock (red) during shutdowns, crystallisation (pink) always | **Scenarios**: *Run day* / *Shutdown day*, plus *Follow-on day*: the second run day in a row, starting with day 1's unfinished work |
 | Phases 1–4 of purchases (slide 3) | **Phase** selector: only units bought by that phase exist. Routes that need an unbought device (and their partners) are skipped and listed; steps pinned to an unbought unit share the bought ones, with a warning |
 
 ## 2. Devices (slide 3)
@@ -46,11 +46,9 @@ Units are listed with the phase each arrives in. Times are "Max Active Device Ti
 | XL200 LiHa / reformatter | 1 (P3) | **assumed 2 min** per plate | deck says "batch". Slide 2 runs two Mosquitos back to back at 5 min, so the LiHa must supply a plate at least every 2.5 min |
 | XL200 thawer | 1 (P3) | **assumed 10 min** | not in device list |
 | DFSA STX-280 (−20 °C) | 1 (P4) | 25 s | |
-| Arktik (−80 °C) | 1 (P4) | 15 s | |
-| Connect (Arktik bench access, reformatting point) | 1 (P4) | **assumed 30 s** | blank in deck |
 | Vitrification | **assumed 1**, P3 | **assumed 2 min** | not in device list |
 | Puck storage | **assumed 1**, P3 | **assumed 25 s** | not in device list |
-| LN2, Waste, MAPs | unlimited | 0 s (MAP manual) | |
+| LN2, Waste, MAPs (reagents, plates, pucks, protein) | unlimited | 0 s (MAP manual) | |
 | Cobots (arm + rail) | 1 (P3), **assumed 2 more** (P4, "2-5 TBC") | **assumed 30 s per move** | count is a run setting |
 
 SpectroQ imaging time per plate is **assumed 3 min** (fixed timing, blue box, value not given).
@@ -61,7 +59,7 @@ Soak incubation is project-specific (orange); default **assumed 1 h**.
 `→` cobot move, `⇒` linked/no move, `[opt]` optional (grey or `*`), `{join X}` convergence.
 
 **Crystallisation setup (pink, both scenarios)**
-1. *Reagents from Arktik −80 °C*: MAP ⇒ Arktik → Connect (reformat) → Centrifuge → XL200 LiHa → [opt LN2 → Connect → Arktik]
+1. *Protein from MAP* (replaces *Reagents from Arktik −80 °C*): MAP (protein in/out) → Centrifuge → XL200 LiHa → [opt LN2 → MAP (protein out)]. The Arktik and its Connect bench access (slide 3 lines 29–30) are out of price range, so protein comes in and goes out by hand at its own manual access point.
 2. *Reagents from −20 °C*: MAP ⇒ DFSA → XL200 thawer → Centrifuge → Peeler → XL200 LiHa → [opt LN2 → DFSA]
 3. *Reagents from SpectroQ*: MAP ⇒ SpectroQ → Centrifuge* → Peeler* → XL200 LiHa → [opt Sealer/Capper → SpectroQ]
 4. *Mosquito source plates*: BenchCel ⇒ Labeller → XL200 LiHa → Sealer → Centrifuge* → Peeler → loop{ Mosquito {join mosquito} } × 8 → Waste.
@@ -84,7 +82,7 @@ Soak incubation is project-specific (orange); default **assumed 1 h**.
 **Seed stock generation (red, shutdown days)**
 
 11. *Seed tubes*: X-ACT → XL200 → Centrifuge* → XL200 [spawns seed vitrification] → SpectroQ
-12. *Seed vitrification*: (spawned) Vitrification → Arktik or DFSA
+12. *Seed vitrification*: (spawned) Vitrification → DFSA (the deck says Arktik or DFSA; the Arktik is left out)
 
 ## 4. Daily schedule defaults (slide 2)
 
@@ -108,3 +106,24 @@ Soak incubation is project-specific (orange); default **assumed 1 h**.
 * Reagent routes release 1 item each per day. Seed tubes: 4 per shutdown day, starting at an X-ACT. One puck of pins per harvested plate.
 * "Sealer/Capper" on the reagent leftover path is read as the A4S sealer.
 * The first step of a route that starts with a cobot move (pins, seed tubes) is fetched from wherever the item was, at the cobot move time.
+
+## 6. Incubators, imaging and growth (added after review with the lab)
+
+* The SpectroQs are incubators. Capacity per unit is taken from the model names: STX-500 **500**, STX-200 **200**,
+  STX-1000 **1000** plates. Slide 3 lists the STX-500 and STX-200 as "storage & imaging" and the STX-1000 as storage
+  only, so only units 1 and 2 have an imager (editable per unit).
+* Plates already inside at the start of the day: **placeholder 100 / 40 / 250**, to be replaced with real counts.
+* Imaging a plate takes wells × seconds per well (default **96 × 8 s = 12 min 48 s**); the 8 s covers all three drops
+  of a well, Z-stacked. A crystal plate is imaged as it goes in (it cannot go elsewhere meanwhile), before and after
+  each soak, and again at the growth schedule (default 1, 2, 4, 8, 16, 32, 64, 128 h after it was stored), until it is
+  taken out for soaking or until 24 h after the last simulated day starts.
+* While a unit images a plate it does nothing else. **Soak images (and every other step) go ahead of growth images**;
+  an image already running is not interrupted.
+* Plates grow before they can be soaked: **normal, mean 2 days, cut off at 2 h and 7 days** (from the lab). The spread
+  was not given; **sd 1 day is assumed**. A soak takes the plate that has been ready longest; until a plate set up in
+  the run has grown it takes one of the plates inside at the start (assumed grown), and if there are none it waits.
+* The lab runs **24/7** (confirmed): days follow each other every 24 h, and manual access points are always staffed,
+  so manual steps never wait for an operator.
+* Multi-day runs repeat the day's releases every 24 h (editable). Result ranges repeat the run with the following
+  seeds; with every time fixed, only growth times differ between seeds unless a time variation (±%) is set.
+
