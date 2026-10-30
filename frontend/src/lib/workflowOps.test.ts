@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   addDevice, addRoute, deviceUsage, insertStep, moveStep, removeRoute, removeStep, updateStep,
 } from './workflowOps'
-import type { Route, Step, Workflow } from './types'
+import { DEFAULT_GROWTH, DEFAULT_IMAGING, type Route, type Step, type Workflow } from './types'
 
 const t = (v: number) => ({ value: v, kind: 'fixed' as const, spread: 0 })
 const step = (d: string, extra: Partial<Step> = {}): Step => ({
   devices: [d], units: null, time: null, dwell: null, timing: null, label: null, optional: false, enabled: true,
-  transport: 'cobot', join: null, sync: null, spawn: [], ...extra,
+  transport: 'cobot', join: null, sync: null, spawn: [], image: false, store: false, ...extra,
 })
 const route = (id: string, steps: Step[], extra: Partial<Route> = {}): Route => ({
   id, name: id, group: '', labware: '', enabled: true, scenarios: ['run', 'shutdown'], count: 1, interval: 0, offset: 0,
@@ -15,13 +15,15 @@ const route = (id: string, steps: Step[], extra: Partial<Route> = {}): Route => 
 })
 const base: Workflow = {
   name: 'w',
-  devices: ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id.toUpperCase(), kind: 'process', unit_phases: [1], time: t(1), timing: 'fixed', note: '' })),
+  devices: ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id.toUpperCase(), kind: 'process', unit_phases: [1], time: t(1), timing: 'fixed', note: '', capacity: null, imager_units: [] })),
   routes: [
     route('r', [step('a'), step('b'), step('c'), step('d')], { loop: { start: 1, end: 2, times: 3 } }),
     route('pins', [step('a')], { count: 0 }),
   ],
   move_time: t(30),
   cobots_by_phase: { '4': 3 },
+  imaging: DEFAULT_IMAGING,
+  growth: DEFAULT_GROWTH,
 }
 const r = (wf: Workflow) => wf.routes[0]
 const devs = (wf: Workflow) => r(wf).steps.map((s) => s.devices[0]).join('')

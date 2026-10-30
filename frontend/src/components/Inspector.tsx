@@ -4,10 +4,10 @@ import {
 } from '../lib/workflowOps'
 import { fmtCompact, fmtDuration, fmtPct } from '../lib/format'
 import {
-  unitsInPhase, type Device, type DeviceKind, type Kpis, type Route, type Scenario, type Step, type Timing,
-  type Transport, type Workflow,
+  DEFAULT_GROWTH, DEFAULT_IMAGING, plateImagingTime, type Growth, unitsInPhase, type Device, type DeviceKind, type Imaging, type Kpis, type Route,
+  type Scenario, type Step, type Timing, type Transport, type Workflow,
 } from '../lib/types'
-import { NumberField, TextField, TimeField } from './fields'
+import { HoursField, NumberField, TextField, TimeField } from './fields'
 import { releaseText, stepName, type Selection } from './WorkflowMap'
 
 interface Props {
@@ -88,6 +88,8 @@ function Overview({ wf, phase, kpis, onChange, onSelect }: Props) {
         ))}
       </div>
 
+      <ImagingSettings wf={wf} onChange={onChange} />
+
       <h3>Devices</h3>
       <table className="mini-table">
         <thead>
@@ -158,6 +160,67 @@ function Overview({ wf, phase, kpis, onChange, onSelect }: Props) {
 
 // ---------------------------------------------------------------- device
 
+function ImagingSettings({ wf, onChange }: { wf: Workflow; onChange: Props['onChange'] }) {
+  const im = wf.imaging ?? DEFAULT_IMAGING
+  const set = (patch: Partial<Imaging>) => onChange({ ...wf, imaging: { ...im, ...patch } })
+  return (
+    <>
+      <h3>Plate imaging</h3>
+      <p className="hint">
+        Incubators with an imager image every well of a plate as it goes in and for each soak, and image stored plates
+        again on the schedule below to follow crystal growth. While a plate is imaged, that incubator does nothing else.
+      </p>
+      <div className="field-row three">
+        <NumberField label="Wells per plate" integer min={1} max={1536} value={im.wells_per_plate} onChange={(wells_per_plate) => set({ wells_per_plate })} />
+        <NumberField label="Drops per well" integer min={1} max={16} value={im.drops_per_well} onChange={(drops_per_well) => set({ drops_per_well })} />
+        <NumberField label="Imaging per well" unit="s" min={0} step={0.5} value={im.seconds_per_well} onChange={(seconds_per_well) => set({ seconds_per_well })} />
+      </div>
+      <p className="hint">
+        {fmtDuration(plateImagingTime(im))} per plate ({im.wells_per_plate} wells, each with its {im.drops_per_well} drops imaged
+        and Z-stacked in {im.seconds_per_well} s).
+      </p>
+      <HoursField
+        label="Image stored plates again after"
+        value={im.schedule_hours}
+        onChange={(schedule_hours) => set({ schedule_hours })}
+      />
+      <p className="hint">
+        Hours after the plate is stored, e.g. 1, 2, 4, 8, 16. Leave empty to image only on the way in. Soak images go
+        ahead of these growth images when both want the same imager.
+      </p>
+      <GrowthSettings wf={wf} onChange={onChange} />
+    </>
+  )
+}
+
+function GrowthSettings({ wf, onChange }: { wf: Workflow; onChange: Props['onChange'] }) {
+  const g = wf.growth ?? DEFAULT_GROWTH
+  const set = (patch: Partial<Growth>) => {
+    const next = { ...g, ...patch }
+    // keep shortest <= typical <= longest
+    if (next.min_hours > next.mean_hours) next.mean_hours = next.min_hours
+    if (next.max_hours < next.mean_hours) next.mean_hours = next.max_hours
+    onChange({ ...wf, growth: next })
+  }
+  return (
+    <>
+      <h3>Crystal growth</h3>
+      <p className="hint">
+        How long a stored crystal plate grows before it can be soaked (normal, cut off at the shortest and longest). A soak
+        takes the plate that has been ready longest; until one has grown, it uses a plate that was inside at the start.
+      </p>
+      <div className="field-row">
+        <NumberField label="Typical" unit="h" min={0.1} max={1440} step={1} value={g.mean_hours} onChange={(mean_hours) => set({ mean_hours })} />
+        <NumberField label="Spread (sd)" unit="h" min={0} max={1440} step={1} value={g.sd_hours} onChange={(sd_hours) => set({ sd_hours })} />
+      </div>
+      <div className="field-row">
+        <NumberField label="Shortest" unit="h" min={0} max={1440} step={1} value={g.min_hours} onChange={(min_hours) => set({ min_hours })} />
+        <NumberField label="Longest" unit="h" min={0.1} max={1440} step={1} value={g.max_hours} onChange={(max_hours) => set({ max_hours })} />
+      </div>
+    </>
+  )
+}
+
 function DevicePanel({ wf, phase, kpis, onChange, onSelect, device: d }: Props & { device: Device }) {
   const set = (patch: Partial<Device>) => onChange(updateDevice(wf, d.id, patch))
   const used = deviceUsage(wf, d.id)
@@ -203,13 +266,92 @@ function DevicePanel({ wf, phase, kpis, onChange, onSelect, device: d }: Props &
                   </select>
                 </label>
                 {p > phase && <span className="hint">not in phase {phase}</span>}
-                <button type="button" className="link danger" onClick={() => set({ unit_phases: phases.filter((_, j) => j !== i) })}>
+                <button
+                  type="button"
+                  className="link danger"
+                  onClick={() =>
+                    set({
+                      unit_phases: phases.filter((_, j) => j !== i),
+                      capacity: d.capacity ? d.capacity.filter((_, j) => j !== i) : null,
+                      stored_at_start: d.stored_at_start ? d.stored_at_start.filter((_, j) => j !== i) : null,
+                      imager_units: d.imager_units.filter((u) => u !== i + 1).map((u) => (u > i + 1 ? u - 1 : u)),
+                    })
+                  }
+                >
                   Remove
                 </button>
               </li>
             ))}
           </ol>
-          <button type="button" onClick={() => set({ unit_phases: [...phases, phase] })}>Add unit</button>
+          <button
+            type="button"
+            onClick={() => set({ unit_phases: [...phases, phase], capacity: d.capacity ? [...d.capacity, d.capacity[d.capacity.length - 1] ?? 100] : null })}
+          >
+            Add unit
+          </button>
+
+          <h3>Incubator</h3>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={d.capacity !== null}
+              onChange={(e) =>
+                set({
+                  capacity: e.target.checked ? phases.map(() => 100) : null,
+                  stored_at_start: e.target.checked ? phases.map(() => 0) : null,
+                  imager_units: e.target.checked ? d.imager_units : [],
+                })
+              }
+            />
+            Stores plates (a step can leave plates here)
+          </label>
+          {d.capacity && (
+            <ol className="unit-list">
+              {phases.map((_, i) => (
+                <li key={i}>
+                  <div className="field-row">
+                    <NumberField
+                      label={`Unit ${i + 1} holds`}
+                      unit="plates"
+                      integer
+                      min={1}
+                      max={100000}
+                      value={d.capacity![i] ?? 100}
+                      onChange={(n) =>
+                        set({
+                          capacity: phases.map((_, j) => (j === i ? n : (d.capacity![j] ?? 100))),
+                          stored_at_start: phases.map((_, j) => Math.min(d.stored_at_start?.[j] ?? 0, j === i ? n : (d.capacity![j] ?? 100))),
+                        })
+                      }
+                    />
+                    <NumberField
+                      label="Inside at the start"
+                      unit="plates"
+                      integer
+                      min={0}
+                      max={d.capacity![i] ?? 100}
+                      value={d.stored_at_start?.[i] ?? 0}
+                      onChange={(n) => set({ stored_at_start: phases.map((_, j) => (j === i ? n : (d.stored_at_start?.[j] ?? 0))) })}
+                    />
+                  </div>
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={d.imager_units.includes(i + 1)}
+                      onChange={(e) =>
+                        set({
+                          imager_units: e.target.checked
+                            ? [...d.imager_units, i + 1].sort((a, b) => a - b)
+                            : d.imager_units.filter((u) => u !== i + 1),
+                        })
+                      }
+                    />
+                    Has an imager
+                  </label>
+                </li>
+              ))}
+            </ol>
+          )}
         </>
       )}
 
@@ -491,6 +633,19 @@ function StepPanel({ wf, phase, onChange, onSelect, route: r, index }: Props & {
         Wait afterwards without holding the device (incubation)
       </label>
       {s.dwell && <TimeField label="Waiting time" spec={s.dwell} onChange={(dwell) => set({ dwell })} />}
+
+      {devices.get(s.devices[0])?.imager_units.length ? (
+        <label className="check">
+          <input type="checkbox" checked={s.image} onChange={(e) => set({ image: e.target.checked })} />
+          Image the whole plate here (adds {fmtDuration(plateImagingTime(wf.imaging ?? DEFAULT_IMAGING))}, on a unit with an imager)
+        </label>
+      ) : null}
+      {index === r.steps.length - 1 && s.devices.length === 1 && devices.get(s.devices[0])?.capacity && (
+        <label className="check">
+          <input type="checkbox" checked={s.store} onChange={(e) => set({ store: e.target.checked })} />
+          The plate stays stored here, and is imaged again on the imaging schedule
+        </label>
+      )}
 
       <label className="check">
         <input type="checkbox" checked={s.enabled} onChange={(e) => set({ enabled: e.target.checked })} />

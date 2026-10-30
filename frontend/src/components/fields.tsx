@@ -68,6 +68,55 @@ export function NumberField({ label, value, onChange, min = 0, max, step = 1, un
   )
 }
 
+const fmtHours = (hs: number[]) => hs.join(', ')
+
+/** A list of hours, typed as "1, 2, 4, 8"; only valid lists are committed. */
+export function HoursField({ label, value, onChange }: { label: string; value: number[]; onChange: (v: number[]) => void }) {
+  const id = useId()
+  const [draft, setDraft] = useState(fmtHours(value))
+  const [invalid, setInvalid] = useState(false)
+  useEffect(() => {
+    setDraft(fmtHours(value))
+    setInvalid(false)
+  }, [value])
+  const commit = (text: string) => {
+    setDraft(text)
+    const parts = text.split(/[\s,;]+/).filter(Boolean)
+    const hs = parts.map(Number)
+    const ok = hs.every((h) => Number.isFinite(h) && h > 0)
+    setInvalid(!ok)
+    if (ok) onChange([...new Set(hs)].sort((a, b) => a - b))
+  }
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor={id}>
+        {label}
+      </label>
+      <span className="field-input">
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          value={draft}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? `${id}-error` : undefined}
+          onChange={(e) => commit(e.target.value)}
+          onBlur={() => {
+            setDraft(fmtHours(value))
+            setInvalid(false)
+          }}
+        />
+        <span className="unit">h</span>
+      </span>
+      {invalid && (
+        <span className="field-error" id={`${id}-error`}>
+          Enter hours above 0, separated by commas. Still using {fmtHours(value) || 'none'}.
+        </span>
+      )}
+    </div>
+  )
+}
+
 export function TextField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   const id = useId()
   return (

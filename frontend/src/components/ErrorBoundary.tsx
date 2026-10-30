@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { WF_KEY } from '../lib/storage'
 
 interface State {
   error: Error | null
@@ -14,7 +15,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
 
   reset = () => {
     try {
-      localStorage.removeItem('axlr8.workflow.v3')
+      localStorage.removeItem(WF_KEY)
     } catch {
       /* storage unavailable */
     }

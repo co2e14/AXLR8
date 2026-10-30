@@ -12,7 +12,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": "Manual access point"
+      "note": "Manual access point",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "map_plates",
@@ -25,7 +28,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": "Manual access point"
+      "note": "Manual access point",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "map_pucks",
@@ -38,37 +44,26 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": "Manual access point"
+      "note": "Manual access point",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
-      "id": "arktik",
-      "name": "Arktik -80 °C",
-      "kind": "storage",
-      "unit_phases": [
-        4
-      ],
+      "id": "map_protein",
+      "name": "MAP (protein in/out)",
+      "kind": "manual",
+      "unit_phases": null,
       "time": {
-        "value": 15.0,
+        "value": 0.0,
         "kind": "fixed",
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
-    },
-    {
-      "id": "connect",
-      "name": "Connect",
-      "kind": "process",
-      "unit_phases": [
-        4
-      ],
-      "time": {
-        "value": 30.0,
-        "kind": "fixed",
-        "spread": 0.0
-      },
-      "timing": "assumed",
-      "note": "Benchtop access for Arktik; reformatting point. Time not in deck"
+      "note": "Manual access point; replaces the Arktik and Connect",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "dfsa",
@@ -83,7 +78,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "xl200_thaw",
@@ -98,7 +96,10 @@
         "spread": 0.0
       },
       "timing": "assumed",
-      "note": "Thaw time not in deck"
+      "note": "Thaw time not in deck",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "xl200",
@@ -113,7 +114,10 @@
         "spread": 0.0
       },
       "timing": "assumed",
-      "note": "Deck says 'batch'. 2 min per plate assumed: slide 2 runs two Mosquitos back to back at 5 min, so the LiHa must supply a plate every 2.5 min"
+      "note": "Deck says 'batch'. 2 min per plate assumed: slide 2 runs two Mosquitos back to back at 5 min, so the LiHa must supply a plate every 2.5 min",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "centrifuge",
@@ -129,7 +133,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "peeler",
@@ -145,7 +152,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "plateloc",
@@ -161,7 +171,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "sealer",
@@ -177,7 +190,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "spectroq",
@@ -194,7 +210,21 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": "STX-500 (P2), STX-200 and STX-1000 (P4)"
+      "note": "STX-500 (P2), STX-200 and STX-1000 (P4). 25 s per access; imaging adds the plate imaging time",
+      "capacity": [
+        500,
+        200,
+        1000
+      ],
+      "stored_at_start": [
+        100,
+        40,
+        250
+      ],
+      "imager_units": [
+        1,
+        2
+      ]
     },
     {
       "id": "benchcel",
@@ -209,7 +239,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "labeller",
@@ -224,7 +257,10 @@
         "spread": 0.0
       },
       "timing": "assumed",
-      "note": "Time blank in deck"
+      "note": "Time blank in deck",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "dc2sa",
@@ -239,7 +275,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "echo",
@@ -255,7 +294,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": "Unit 2 is the existing XChem Echo relocated in P4 (slide 3 lists it with quantity 0)"
+      "note": "Unit 2 is the existing XChem Echo relocated in P4 (slide 3 lists it with quantity 0)",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "mosquito_lcp",
@@ -270,7 +312,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "mosquito_xtal3",
@@ -285,7 +330,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "xact",
@@ -305,7 +353,10 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "vitrification",
@@ -320,7 +371,10 @@
         "spread": 0.0
       },
       "timing": "assumed",
-      "note": "Not in device list; 1 unit assumed"
+      "note": "Not in device list; 1 unit assumed",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "puck_storage",
@@ -335,7 +389,10 @@
         "spread": 0.0
       },
       "timing": "assumed",
-      "note": "Not in device list; 1 unit assumed"
+      "note": "Not in device list; 1 unit assumed",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "ln2",
@@ -348,7 +405,10 @@
         "spread": 0.0
       },
       "timing": "assumed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     },
     {
       "id": "waste",
@@ -361,13 +421,16 @@
         "spread": 0.0
       },
       "timing": "fixed",
-      "note": ""
+      "note": "",
+      "capacity": null,
+      "stored_at_start": null,
+      "imager_units": []
     }
   ],
   "routes": [
     {
-      "id": "reagents_arktik",
-      "name": "Reagents from Arktik -80 °C",
+      "id": "protein",
+      "name": "Protein from MAP",
       "group": "Crystallisation setup",
       "labware": "Reagents",
       "enabled": true,
@@ -381,7 +444,7 @@
       "steps": [
         {
           "devices": [
-            "map_reagents"
+            "map_protein"
           ],
           "units": null,
           "time": null,
@@ -393,39 +456,9 @@
           "transport": "manual",
           "join": null,
           "sync": null,
-          "spawn": []
-        },
-        {
-          "devices": [
-            "arktik"
-          ],
-          "units": null,
-          "time": null,
-          "dwell": null,
-          "timing": null,
-          "label": null,
-          "optional": false,
-          "enabled": true,
-          "transport": "manual",
-          "join": null,
-          "sync": null,
-          "spawn": []
-        },
-        {
-          "devices": [
-            "connect"
-          ],
-          "units": null,
-          "time": null,
-          "dwell": null,
-          "timing": null,
-          "label": "Reformat (Connect)",
-          "optional": false,
-          "enabled": true,
-          "transport": "linked",
-          "join": null,
-          "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -441,7 +474,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -457,7 +492,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -473,39 +510,27 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
-            "connect"
+            "map_protein"
           ],
           "units": null,
           "time": null,
           "dwell": null,
           "timing": null,
-          "label": "Leftover: Connect",
+          "label": "Leftover: protein out",
           "optional": true,
           "enabled": false,
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
-        },
-        {
-          "devices": [
-            "arktik"
-          ],
-          "units": null,
-          "time": null,
-          "dwell": null,
-          "timing": null,
-          "label": "Leftover: Arktik",
-          "optional": true,
-          "enabled": false,
-          "transport": "linked",
-          "join": null,
-          "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": null
@@ -538,7 +563,9 @@
           "transport": "manual",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -554,7 +581,9 @@
           "transport": "manual",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -570,7 +599,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -586,7 +617,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -602,7 +635,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -618,7 +653,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -634,7 +671,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -650,7 +689,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": null
@@ -683,7 +724,9 @@
           "transport": "manual",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -699,7 +742,9 @@
           "transport": "manual",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -715,7 +760,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -731,7 +778,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -747,7 +796,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -763,7 +814,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -779,7 +832,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": null
@@ -812,7 +867,9 @@
           "transport": "linked",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -828,7 +885,9 @@
           "transport": "linked",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -844,7 +903,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -860,7 +921,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -876,7 +939,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -892,7 +957,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -909,7 +976,9 @@
           "transport": "cobot",
           "join": "mosquito",
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -925,7 +994,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": {
@@ -962,7 +1033,9 @@
           "transport": "linked",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -978,7 +1051,9 @@
           "transport": "linked",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -994,7 +1069,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1011,7 +1088,9 @@
           "transport": "cobot",
           "join": "mosquito",
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1027,7 +1106,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1043,7 +1124,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1059,7 +1142,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": true,
+          "store": true
         }
       ],
       "loop": null
@@ -1091,7 +1176,9 @@
           "transport": "linked",
           "join": null,
           "sync": "soak_1_start",
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1109,7 +1196,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1127,7 +1216,9 @@
           "transport": "cobot",
           "join": "soak_1",
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1143,51 +1234,49 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
             "spectroq"
           ],
           "units": null,
-          "time": {
-            "value": 180.0,
-            "kind": "fixed",
-            "spread": 0.0
-          },
+          "time": null,
           "dwell": {
             "value": 3600.0,
             "kind": "fixed",
             "spread": 0.0
           },
-          "timing": "assumed",
+          "timing": null,
           "label": "Pre-soak imaging",
           "optional": false,
           "enabled": true,
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": true,
+          "store": false
         },
         {
           "devices": [
             "spectroq"
           ],
           "units": null,
-          "time": {
-            "value": 180.0,
-            "kind": "fixed",
-            "spread": 0.0
-          },
+          "time": null,
           "dwell": null,
-          "timing": "assumed",
+          "timing": null,
           "label": "Post-soak imaging",
           "optional": false,
           "enabled": true,
           "transport": "linked",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": true,
+          "store": false
         },
         {
           "devices": [
@@ -1205,7 +1294,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1230,7 +1321,9 @@
               "route": "pins",
               "count": 1
             }
-          ]
+          ],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1246,7 +1339,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1262,7 +1357,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": null
@@ -1294,7 +1391,9 @@
           "transport": "linked",
           "join": null,
           "sync": "soak_2_start",
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1312,7 +1411,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1330,7 +1431,9 @@
           "transport": "cobot",
           "join": "soak_2",
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1346,51 +1449,49 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
             "spectroq"
           ],
           "units": null,
-          "time": {
-            "value": 180.0,
-            "kind": "fixed",
-            "spread": 0.0
-          },
+          "time": null,
           "dwell": {
             "value": 3600.0,
             "kind": "fixed",
             "spread": 0.0
           },
-          "timing": "assumed",
+          "timing": null,
           "label": "Pre-soak imaging",
           "optional": false,
           "enabled": true,
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": true,
+          "store": false
         },
         {
           "devices": [
             "spectroq"
           ],
           "units": null,
-          "time": {
-            "value": 180.0,
-            "kind": "fixed",
-            "spread": 0.0
-          },
+          "time": null,
           "dwell": null,
-          "timing": "assumed",
+          "timing": null,
           "label": "Post-soak imaging",
           "optional": false,
           "enabled": true,
           "transport": "linked",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": true,
+          "store": false
         },
         {
           "devices": [
@@ -1408,7 +1509,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1433,7 +1536,9 @@
               "route": "pins",
               "count": 1
             }
-          ]
+          ],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1449,7 +1554,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1465,7 +1572,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": null
@@ -1497,7 +1606,9 @@
           "transport": "linked",
           "join": null,
           "sync": "soak_1_start",
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1515,7 +1626,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1533,7 +1646,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1551,7 +1666,9 @@
           "transport": "cobot",
           "join": "soak_1",
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1567,7 +1684,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1583,7 +1702,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": {
@@ -1619,7 +1740,9 @@
           "transport": "linked",
           "join": null,
           "sync": "soak_2_start",
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1637,7 +1760,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1655,7 +1780,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1673,7 +1800,9 @@
           "transport": "cobot",
           "join": "soak_2",
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1689,7 +1818,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1705,7 +1836,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": {
@@ -1742,7 +1875,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1758,7 +1893,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": null
@@ -1790,7 +1927,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1806,7 +1945,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1822,7 +1963,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1843,7 +1986,9 @@
               "route": "seed_vitrification",
               "count": 1
             }
-          ]
+          ],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
@@ -1859,7 +2004,9 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": null
@@ -1891,24 +2038,27 @@
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         },
         {
           "devices": [
-            "arktik",
             "dfsa"
           ],
           "units": null,
           "time": null,
           "dwell": null,
           "timing": null,
-          "label": "Arktik or DFSA",
+          "label": null,
           "optional": false,
           "enabled": true,
           "transport": "cobot",
           "join": null,
           "sync": null,
-          "spawn": []
+          "spawn": [],
+          "image": false,
+          "store": false
         }
       ],
       "loop": null
@@ -1924,5 +2074,21 @@
     "2": 0,
     "3": 1,
     "4": 3
+  },
+  "layout": null,
+  "imaging": {
+    "wells_per_plate": 96,
+    "drops_per_well": 3,
+    "seconds_per_well": 8.0,
+    "schedule_hours": [
+      1.0,
+      2.0,
+      4.0,
+      8.0,
+      16.0,
+      32.0,
+      64.0,
+      128.0
+    ]
   }
 }

@@ -15,7 +15,7 @@ const mapRoute = (wf: Workflow, id: string, fn: (r: Route) => Route): Workflow =
 export function newStep(device: string): Step {
   return {
     devices: [device], units: null, time: null, dwell: null, timing: null, label: null, optional: false,
-    enabled: true, transport: 'cobot', join: null, sync: null, spawn: [],
+    enabled: true, transport: 'cobot', join: null, sync: null, spawn: [], image: false, store: false,
   }
 }
 
@@ -33,6 +33,7 @@ export function addDevice(wf: Workflow): Workflow {
   const id = uniqueId('device_', wf.devices.map((d) => d.id))
   const device: Device = {
     id, name: 'New device', kind: 'process', unit_phases: [1], time: fixedTime(60), timing: 'assumed', note: '',
+    capacity: null, imager_units: [],
   }
   return { ...wf, devices: [...wf.devices, device] }
 }

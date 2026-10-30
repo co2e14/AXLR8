@@ -17,16 +17,17 @@ def t(v, kind="fixed", spread=0):
     return {"value": v, "kind": kind, "spread": spread}
 
 
-def d(id, name, phases, secs, kind="process", timing="fixed", note=""):
-    return {"id": id, "name": name, "unit_phases": phases, "time": t(secs), "kind": kind, "timing": timing, "note": note}
+def d(id, name, phases, secs, kind="process", timing="fixed", note="", **kw):
+    return {"id": id, "name": name, "unit_phases": phases, "time": t(secs), "kind": kind, "timing": timing, "note": note, **kw}
 
 
 devices = [
     d("map_reagents", "MAP (reagents in/out)", None, 0, "manual", note="Manual access point"),
     d("map_plates", "MAP (plates in/out)", None, 0, "manual", note="Manual access point"),
     d("map_pucks", "MAP (pucks in/out)", None, 0, "manual", note="Manual access point"),
-    d("arktik", "Arktik -80 °C", [4], 15, "storage"),
-    d("connect", "Connect", [4], 30, timing=A, note="Benchtop access for Arktik; reformatting point. Time not in deck"),
+    # The Arktik -80 °C store and its Connect bench access (slide 3 lines 29-30) are out of price range;
+    # protein comes in and goes out by hand at its own manual access point instead.
+    d("map_protein", "MAP (protein in/out)", None, 0, "manual", note="Manual access point; replaces the Arktik and Connect"),
     d("dfsa", "DFSA STX-280 -20 °C", [4], 25, "storage"),
     d("xl200_thaw", "XL200 thawer", [3], 600, timing=A, note="Thaw time not in deck"),
     d("xl200", "XL200 LiHa", [3], 120, timing=A,
@@ -35,7 +36,13 @@ devices = [
     d("peeler", "XPEEL peeler", [1, 4], 18),
     d("plateloc", "PlateLoc foil sealer", [1, 4], 8),
     d("sealer", "A4S clear sealer", [2, 4], 10),
-    d("spectroq", "SpectroQ", [2, 4, 4], 25, "storage", note="STX-500 (P2), STX-200 and STX-1000 (P4)"),
+    # Incubators. Slide 3: the STX-500 and STX-200 store and image plates, the STX-1000 only stores them.
+    d(
+        "spectroq", "SpectroQ", [2, 4, 4], 25, "storage",
+        note="STX-500 (P2), STX-200 and STX-1000 (P4). 25 s per access; imaging adds the plate imaging time",
+        capacity=[500, 200, 1000], imager_units=[1, 2],
+        stored_at_start=[100, 40, 250],  # placeholder: grown plates already inside; set to the real numbers
+    ),
     d("benchcel", "BenchCel", [2], 20),
     d("labeller", "Plate labeller", [2], 10, timing=A, note="Time blank in deck"),
     d("dc2sa", "DC2SA compound storage", [2], 25, "storage"),
@@ -54,7 +61,6 @@ def s(*devs, **kw):
     return {"devices": list(devs), **kw}
 
 
-IMAGING = t(180)
 INCUBATION = t(3600)
 BOTH = ["run", "shutdown"]
 
@@ -68,8 +74,8 @@ def soak(n, units_xact, offset):
             s("peeler", units=[n]),
             s("echo", units=[n], join=f"soak_{n}", label="Echo soak"),
             s("sealer"),
-            s("spectroq", time=IMAGING, timing=A, label="Pre-soak imaging", dwell=INCUBATION),
-            s("spectroq", time=IMAGING, timing=A, transport="linked", label="Post-soak imaging"),
+            s("spectroq", image=True, label="Pre-soak imaging", dwell=INCUBATION),
+            s("spectroq", image=True, transport="linked", label="Post-soak imaging"),
             s("peeler", units=[n]),
             s("xact", units=units_xact, spawn=[{"route": "pins", "count": 1}]),
             s("sealer", optional=True, label="Seal harvested plate"),
@@ -96,17 +102,14 @@ def compound(n):
 
 routes = [
     {
-        "id": "reagents_arktik", "name": "Reagents from Arktik -80 °C", "group": "Crystallisation setup",
+        "id": "protein", "name": "Protein from MAP", "group": "Crystallisation setup",
         "labware": "Reagents", "scenarios": BOTH, "count": 1,
         "steps": [
-            s("map_reagents", transport="manual"),
-            s("arktik", transport="manual"),
-            s("connect", transport="linked", label="Reformat (Connect)"),
+            s("map_protein", transport="manual"),
             s("centrifuge"),
             s("xl200"),
             s("ln2", optional=True, enabled=False, label="Leftover: LN2"),
-            s("connect", optional=True, enabled=False, label="Leftover: Connect"),
-            s("arktik", optional=True, enabled=False, transport="linked", label="Leftover: Arktik"),
+            s("map_protein", optional=True, enabled=False, label="Leftover: protein out"),
         ],
     },
     {
@@ -161,7 +164,7 @@ routes = [
             s("mosquito_xtal3", "mosquito_lcp", join="mosquito", label="Mosquito"),
             s("sealer"),
             s("centrifuge", optional=True, label="Centrifuge*"),
-            s("spectroq", timing=P, label="Growth storage"),
+            s("spectroq", timing=P, image=True, store=True, label="Growth storage"),
         ],
     },
     soak(1, [1, 3, 5], 0),
@@ -187,7 +190,7 @@ routes = [
     {
         "id": "seed_vitrification", "name": "Seed stock vitrification", "group": "Seed stock generation",
         "labware": "Seed tubes", "scenarios": ["shutdown"], "count": 0,
-        "steps": [s("vitrification"), s("arktik", "dfsa", label="Arktik or DFSA")],
+        "steps": [s("vitrification"), s("dfsa")],
     },
 ]
 

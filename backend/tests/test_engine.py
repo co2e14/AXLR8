@@ -1,7 +1,8 @@
 import pytest
 
-from axlr8.engine import WorkflowError
-from axlr8.model import Loop, Spawn, TimeSpec
+from axlr8.engine import WorkflowError, simulate
+from axlr8.kpis import compute_kpis
+from axlr8.model import Loop, RunSettings, Spawn, TimeSpec
 from conftest import dev, done, route, run, starts, step, wf
 
 
@@ -217,3 +218,29 @@ def test_sync_makes_two_routes_start_a_step_together_on_their_own_devices():
     starts_at = lambda d: [t for t, _, _ in starts(events, d)]
     assert starts_at("spectroq") == [100, 1000]
     assert starts_at("dc2sa") == [100, 1000]  # waits in storage for its crystal plate
+
+
+def test_follow_on_day_starts_with_the_previous_days_unfinished_work():
+    # One 100 s device, two items a day: day 1's second item is still processing when day 2 starts at 150 s.
+    w = wf([dev("a", 100)], [route("r", [step("a")], count=2, scenarios=["run"])])
+    events = run(w, scenario="follow_on", day_length=150)
+    carried = {e.item for e in events if e.carried}
+    assert len(carried) == 2  # both day-1 items keep their events, at negative times
+    unfinished = {e.item for e in events if e.kind == "completed" and e.t >= 0} & carried
+    assert len(unfinished) == 1  # one of them was still processing when day 2 started
+    assert done(events) == [-50, 50, 150, 250]  # day 1 at -50 and 200 - 150; then day 2's two queue behind it
+
+
+def test_follow_on_kpis_cover_day_two_only():
+    w = wf([dev("a", 100)], [route("r", [step("a")], count=2, scenarios=["run"])])
+    r = RunSettings(scenario="follow_on", day_length=150)
+    k = compute_kpis(w, r, simulate(w, r))
+    assert (k.released, k.completed, k.carried_over, k.carried_completed) == (2, 2, 1, 1)
+    assert k.makespan == 250
+    assert k.devices[0].utilisation == pytest.approx(1.0)  # busy from 0 to 250
+    assert k.devices[0].uses == 2  # the carried item's run started on day 1
+
+
+def test_follow_on_runs_the_run_day_routes():
+    w = wf([dev("a", 1)], [route("soak", [step("a")], scenarios=["run"]), route("seed", [step("a")], scenarios=["shutdown"])])
+    assert {e.route for e in run(w, scenario="follow_on")} == {"soak"}

@@ -1,4 +1,7 @@
-import type { Device, Route, Step, Workflow } from './types'
+import { DEFAULT_GROWTH, DEFAULT_IMAGING, type Device, type Growth, type Imaging, type Layout, type Route, type Step, type Workflow } from './types'
+
+/** Where the edited workflow is kept in the browser; bump when the deck example changes shape. */
+export const WF_KEY = 'axlr8.workflow.v4'
 
 const isObject = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null
 const isTime = (x: unknown) => isObject(x) && typeof x.value === 'number'
@@ -7,7 +10,7 @@ function asStep(s: unknown): Step | null {
   if (!isObject(s) || !Array.isArray(s.devices) || s.devices.length === 0) return null
   return {
     units: null, time: null, dwell: null, timing: null, label: null, optional: false, enabled: true,
-    transport: 'cobot', join: null, sync: null, spawn: [], ...(s as Partial<Step>), devices: s.devices as string[],
+    transport: 'cobot', join: null, sync: null, spawn: [], image: false, store: false, ...(s as Partial<Step>), devices: s.devices as string[],
   }
 }
 
@@ -23,7 +26,10 @@ function asRoute(r: unknown): Route | null {
 
 function asDevice(d: unknown): Device | null {
   if (!isObject(d) || typeof d.id !== 'string' || !isTime(d.time)) return null
-  return { name: d.id, kind: 'process', unit_phases: [1], timing: 'fixed', note: '', ...(d as Partial<Device>), id: d.id, time: d.time as Device['time'] }
+  return {
+    name: d.id, kind: 'process', unit_phases: [1], timing: 'fixed', note: '', capacity: null, stored_at_start: null, imager_units: [],
+    ...(d as Partial<Device>), id: d.id, time: d.time as Device['time'],
+  }
 }
 
 /** Returns `value` as a Workflow if it has the shape the app relies on, otherwise null.
@@ -40,5 +46,8 @@ export function asWorkflow(value: unknown): Workflow | null {
     routes: routes as Route[],
     move_time: isTime(value.move_time) ? (value.move_time as Workflow['move_time']) : { value: 30, kind: 'fixed', spread: 0 },
     cobots_by_phase: isObject(value.cobots_by_phase) ? (value.cobots_by_phase as Record<string, number>) : { '3': 1, '4': 3 },
+    layout: isObject(value.layout) && Array.isArray(value.layout.placements) ? (value.layout as unknown as Layout) : null,
+    imaging: isObject(value.imaging) ? { ...DEFAULT_IMAGING, ...(value.imaging as Partial<Imaging>) } : { ...DEFAULT_IMAGING },
+    growth: isObject(value.growth) ? { ...DEFAULT_GROWTH, ...(value.growth as Partial<Growth>) } : { ...DEFAULT_GROWTH },
   }
 }

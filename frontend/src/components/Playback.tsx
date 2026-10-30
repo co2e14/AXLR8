@@ -2,14 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { fmtClock } from '../lib/format'
 
 export const SPEEDS = [1, 10, 60, 300, 1800, 7200]
-
-/** Smallest speed that replays the whole run in about 30 seconds or less. */
-export const autoSpeed = (makespan: number) => SPEEDS.find((s) => makespan / s <= 30) ?? SPEEDS[SPEEDS.length - 1]
+const DEFAULT_SPEED = 60
 
 export function usePlayback(makespan: number) {
   const [t, setT] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [speed, setSpeed] = useState(10)
+  const [speed, setSpeed] = useState(DEFAULT_SPEED)
   const last = useRef<number | null>(null)
 
   useEffect(() => {
@@ -32,9 +30,9 @@ export function usePlayback(makespan: number) {
     if (playing && t >= makespan) setPlaying(false)
   }, [playing, t, makespan])
 
-  const start = useCallback((total: number) => {
+  const start = useCallback(() => {
     setT(0)
-    setSpeed(autoSpeed(total))
+    setSpeed(DEFAULT_SPEED)
     setPlaying(true)
   }, [])
 

@@ -7,3 +7,6 @@ dist/
 .DS_Store
 .env
 .superpowers/
+db/seed.sql
+backend/.labdb/
+.claude/
