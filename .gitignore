@@ -9,3 +9,4 @@ dist/
 .superpowers/
 db/seed.sql
 backend/.labdb/
+.claude/
